@@ -1,0 +1,29 @@
+{
+  "name": "carteira-livre",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Controle de carteira a partir do extrato B3 — open source e local-first",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.14.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "13.5.11",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "recharts": "^2.15.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.8.0"
+  }
+}

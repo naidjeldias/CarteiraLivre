@@ -1,0 +1,17 @@
+node_modules
+.next
+out
+build
+coverage
+.DS_Store
+*.pem
+.env
+.env*.local
+data/uploads/
+*.xlsx
+!**/fixtures/**/*.xlsx
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+next-env.d.ts
+*.tsbuildinfo
