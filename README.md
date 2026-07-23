@@ -9,6 +9,7 @@ Controle de carteira a partir do extrato `.xlsx` da B3 — **open source**, **lo
 - Destaca FIIs com alocação por **tipo** (papel, tijolo, híbrido, FoF…) e **segmento**
 - Mostra patrimônio, tabelas e barras de alocação
 - **Opcional:** atualiza preços de mercado via [brapi.dev](https://brapi.dev) (plano Free)
+- Clique em um FII → página de detalhes com gráfico de cotação (~3 meses) e dividendos (se o plano brapi permitir)
 
 ## Stack
 
@@ -31,21 +32,21 @@ npm run dev
 
 Abra http://localhost:3000 e envie seu `.xlsx` da B3.
 
-### Cotações (brapi Free)
+### Cotações e dividendos
 
-1. Crie conta em [brapi.dev/dashboard](https://brapi.dev/dashboard) e gere um token.
-2. Coloque em `.env.local`:
+| Dado | Fonte padrão | Alternativa |
+|------|--------------|-------------|
+| Preço / histórico ~3m | **brapi** Free (`BRAPI_TOKEN`) | — |
+| Dividendos de FIIs | **Status Invest** (sem chave) | **bolsai** Free (`BOLSAI_API_KEY`) ou brapi Pro |
 
 ```bash
-BRAPI_TOKEN=seu_token_aqui
+cp .env.example .env.local
+# BRAPI_TOKEN=...          # cotações
+# BOLSAI_API_KEY=...       # opcional, dividendos via API oficial
 ```
 
-3. Reinicie `npm run dev`.
-4. Após importar o extrato, clique em **Atualizar preços (brapi)**.
-
-O plano Free cobre cotações básicas (1 ticker por request; o servidor faz em sequência).  
-Classificação papel/tijolo **não** vem do Free — continua no catálogo local.  
-Cache no `localStorage` por ~30 minutos.
+Cascata de dividendos: bolsai (se configurada) → Status Invest → brapi Pro.  
+Status Invest não é API oficial — pode mudar; bolsai é mais estável (200 req/dia no Free).
 
 ## Privacidade
 

@@ -13,6 +13,11 @@ import {
 import { lookupFii } from "@/lib/fii-catalog";
 import { parseB3Xlsx } from "@/lib/parse-b3";
 import {
+  clearPortfolioSnapshot,
+  loadPortfolioSnapshot,
+  savePortfolioSnapshot,
+} from "@/lib/portfolio-storage";
+import {
   fetchMarketQuotes,
   fetchQuotesStatus,
   formatSignedPct,
@@ -24,6 +29,11 @@ import {
   type QuotesMap,
 } from "@/lib/quotes";
 import type { PortfolioSnapshot } from "@/lib/types";
+
+function openFiiDetail(ticker: string) {
+  // Mesma aba: histórico do browser + snapshot no localStorage
+  window.location.href = `/fii/${encodeURIComponent(ticker)}`;
+}
 
 function AllocationBars({
   title,
@@ -70,6 +80,9 @@ export default function HomePage() {
   const [brapiConfigured, setBrapiConfigured] = useState<boolean | null>(null);
 
   useEffect(() => {
+    const saved = loadPortfolioSnapshot();
+    if (saved) setSnapshot(saved);
+
     fetchQuotesStatus()
       .then((s) => setBrapiConfigured(s.configured))
       .catch(() => setBrapiConfigured(false));
@@ -79,6 +92,12 @@ export default function HomePage() {
       setQuotesAt(cached.fetchedAt);
     }
   }, []);
+
+  function applySnapshot(next: PortfolioSnapshot | null) {
+    setSnapshot(next);
+    if (next) savePortfolioSnapshot(next);
+    else clearPortfolioSnapshot();
+  }
 
   const refreshQuotes = useCallback(async (positions: PortfolioSnapshot["positions"]) => {
     const symbols = quoteableTickers(positions);
@@ -111,16 +130,24 @@ export default function HomePage() {
       const parsed = await parseB3Xlsx(file);
       if (parsed.positions.length === 0) {
         setError("Nenhuma posição encontrada. Confira se o arquivo é o extrato/posição da B3.");
-        setSnapshot(null);
+        applySnapshot(null);
       } else {
-        setSnapshot(parsed);
+        applySnapshot(parsed);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao ler o arquivo.");
-      setSnapshot(null);
+      applySnapshot(null);
     } finally {
       setLoading(false);
     }
+  }
+
+  function clearPortfolio() {
+    applySnapshot(null);
+    setQuotes(null);
+    setQuotesAt(null);
+    setQuotesError(null);
+    setError(null);
   }
 
   const patrimonioExtrato = snapshot ? totalValue(snapshot.positions) : 0;
@@ -150,8 +177,9 @@ export default function HomePage() {
           onChange={(e) => onFileChange(e.target.files?.[0] ?? null)}
         />
         <p className="hint">
-          O extrato não é enviado à brapi. Só os tickers vão à API de cotação (via servidor local),
-          com token em <code>.env.local</code>.
+          O extrato não é enviado à brapi. A posição fica salva neste navegador (localStorage)
+          para você voltar da página do FII sem perder os dados. Token em{" "}
+          <code>.env.local</code>.
         </p>
         {loading && <p className="hint">Lendo arquivo…</p>}
         {error && <p className="error">{error}</p>}
@@ -167,6 +195,9 @@ export default function HomePage() {
               onClick={() => refreshQuotes(snapshot.positions)}
             >
               {quotesLoading ? "Atualizando cotações…" : "Atualizar preços (brapi)"}
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={clearPortfolio}>
+              Limpar carteira
             </button>
             {brapiConfigured === false && (
               <p className="hint">
@@ -212,6 +243,10 @@ export default function HomePage() {
 
           <section className="panel" style={{ marginTop: "1rem" }}>
             <h2>Fundos imobiliários</h2>
+            <p className="hint" style={{ marginBottom: "0.75rem" }}>
+              Clique em um FII para ver cotação e dividendos. Ao voltar, a carteira importada
+              permanece.
+            </p>
             <div className="table-wrap">
               <table>
                 <thead>
@@ -237,8 +272,22 @@ export default function HomePage() {
                     const val = marketValue(p, quotes);
                     const fiiBase = hasQuotes ? fiiTotalMercado : fiiTotalExtrato;
                     return (
-                      <tr key={`${p.ticker}-${p.broker ?? ""}`}>
-                        <td>{p.ticker}</td>
+                      <tr
+                        key={`${p.ticker}-${p.broker ?? ""}`}
+                        className="clickable"
+                        onClick={() => openFiiDetail(p.ticker)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            openFiiDetail(p.ticker);
+                          }
+                        }}
+                        tabIndex={0}
+                        title={`Abrir detalhes de ${p.ticker}`}
+                      >
+                        <td>
+                          <span className="ticker-link">{p.ticker}</span>
+                        </td>
                         <td>
                           <span className={`badge${unknown ? " warn" : ""}`}>{meta.tipo}</span>
                         </td>
