@@ -17,7 +17,11 @@ import {
 } from "recharts";
 import { formatBRL, formatPct } from "@/lib/allocation";
 import { lookupFii } from "@/lib/fii-catalog";
+import type { FiiFundamentals } from "@/lib/fii-fundamentals";
+import type { PriceSignal } from "@/lib/fii-score";
 import { formatSignedPct } from "@/lib/quotes";
+import type { FiiTipo } from "@/lib/types";
+import { FiiAnalysisPanel } from "@/components/FiiAnalysisPanel";
 
 interface QuoteInfo {
   price: number;
@@ -52,6 +56,10 @@ interface DetailPayload {
   dividendsSource?: string | null;
   dividendYieldTtm?: number | null;
   ttmPerShare?: number | null;
+  fundamentals?: FiiFundamentals | null;
+  resolvedTipo?: FiiTipo;
+  priceSignal?: PriceSignal;
+  providers?: { brapiConfigured?: boolean; bolsaiConfigured?: boolean };
   fetchedAt: string;
   error?: string;
 }
@@ -155,10 +163,16 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
             {data?.quote?.longName || data?.quote?.shortName || meta.name}
           </p>
           <div className="detail-meta">
-            <span className={`badge${meta.tipo === "desconhecido" ? " warn" : ""}`}>
-              {meta.tipo}
+            <span
+              className={`badge${
+                (data?.resolvedTipo || meta.tipo) === "desconhecido" ? " warn" : ""
+              }`}
+            >
+              {data?.resolvedTipo || meta.tipo}
             </span>
-            <span className="hint">{meta.segmento}</span>
+            <span className="hint">
+              {data?.fundamentals?.segment || meta.segmento}
+            </span>
           </div>
         </div>
         {data?.quote && (
@@ -429,6 +443,15 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
             </>
           )}
         </section>
+      )}
+
+      {!loading && !error && data?.priceSignal && (
+        <FiiAnalysisPanel
+          tipo={data.resolvedTipo || meta.tipo}
+          fundamentals={data.fundamentals ?? null}
+          priceSignal={data.priceSignal}
+          bolsaiConfigured={Boolean(data.providers?.bolsaiConfigured)}
+        />
       )}
     </main>
   );

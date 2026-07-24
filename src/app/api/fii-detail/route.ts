@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { brapiHeaders, getBrapiToken, isValidB3Ticker } from "@/lib/brapi-server";
 import { fetchFiiDividends } from "@/lib/dividends-providers";
+import { fetchBolsaiFundamentals, fundTypeFromBolsai } from "@/lib/fii-fundamentals";
+import { lookupFii } from "@/lib/fii-catalog";
+import { computePriceSignal } from "@/lib/fii-score";
 
 export interface PricePoint {
   date: string;
@@ -104,6 +107,20 @@ async function fetchHistory(ticker: string, token: string): Promise<PricePoint[]
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
+function monthlyDividendSeries(
+  dividends: Array<{ paymentDate: string; rate: number }>
+): number[] {
+  const map = new Map<string, number>();
+  for (const d of dividends) {
+    const key = d.paymentDate.slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(key)) continue;
+    map.set(key, (map.get(key) ?? 0) + d.rate);
+  }
+  return [...map.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([, v]) => v);
+}
+
 export async function GET(req: NextRequest) {
   const ticker = (req.nextUrl.searchParams.get("ticker") || "").trim().toUpperCase();
   if (!isValidB3Ticker(ticker)) {
@@ -111,12 +128,42 @@ export async function GET(req: NextRequest) {
   }
 
   const token = getBrapiToken();
+  const catalog = lookupFii(ticker);
 
-  const [quote, history, divResult] = await Promise.all([
+  const [quote, history, divResult, fundamentals] = await Promise.all([
     token ? fetchQuote(ticker, token) : Promise.resolve(null),
     token ? fetchHistory(ticker, token) : Promise.resolve([] as PricePoint[]),
     fetchFiiDividends(ticker, token),
+    fetchBolsaiFundamentals(ticker),
   ]);
+
+  const price = quote?.price ?? fundamentals?.closePrice ?? null;
+  const ttmFromDivs = (() => {
+    const cutoff = Date.now() - 365 * 24 * 60 * 60 * 1000;
+    return divResult.dividends
+      .filter((d) => Date.parse(d.paymentDate) >= cutoff)
+      .reduce((s, d) => s + d.rate, 0);
+  })();
+
+  const dyTtm =
+    fundamentals?.dividendYieldTtm ??
+    divResult.dividendYieldTtm ??
+    (price && ttmFromDivs > 0 ? (ttmFromDivs / price) * 100 : null);
+
+  const tipo =
+    fundTypeFromBolsai(fundamentals?.fundType) ||
+    (catalog.tipo !== "desconhecido" ? catalog.tipo : "desconhecido");
+
+  const priceSignal = computePriceSignal({
+    tipo,
+    pvp: fundamentals?.pvp,
+    dividendYieldTtm: dyTtm,
+    monthlyDividends: monthlyDividendSeries(divResult.dividends),
+    vacancyPct: fundamentals?.vacancyPct,
+    delinquencyPct: fundamentals?.delinquencyPct,
+    fiiHoldingsPct: fundamentals?.assetComposition?.fiiHoldingsPct,
+    criPct: fundamentals?.assetComposition?.criPct,
+  });
 
   return NextResponse.json({
     ticker,
@@ -125,8 +172,11 @@ export async function GET(req: NextRequest) {
     dividends: divResult.dividends,
     dividendsNote: divResult.note,
     dividendsSource: divResult.source ?? null,
-    dividendYieldTtm: divResult.dividendYieldTtm ?? null,
-    ttmPerShare: divResult.ttmPerShare ?? null,
+    dividendYieldTtm: dyTtm,
+    ttmPerShare: divResult.ttmPerShare ?? (ttmFromDivs || null),
+    fundamentals,
+    resolvedTipo: tipo,
+    priceSignal,
     providers: {
       brapiConfigured: Boolean(token),
       bolsaiConfigured: Boolean(process.env.BOLSAI_API_KEY?.trim()),

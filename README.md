@@ -9,7 +9,7 @@ Controle de carteira a partir do extrato `.xlsx` da B3 — **open source**, **lo
 - Destaca FIIs com alocação por **tipo** (papel, tijolo, híbrido, FoF…) e **segmento**
 - Mostra patrimônio, tabelas e barras de alocação
 - **Opcional:** atualiza preços de mercado via [brapi.dev](https://brapi.dev) (plano Free)
-- Clique em um FII → página de detalhes com gráfico de cotação (~3 meses) e dividendos (se o plano brapi permitir)
+- Clique em um FII → cotação, dividendos, indicadores por tipo e **sinal de preço** (score)
 
 ## Stack
 
