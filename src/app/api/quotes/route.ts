@@ -85,7 +85,7 @@ async function fetchLegacyQuote(ticker: string, token: string): Promise<QuoteRes
   };
   const row = json.results?.[0];
   const price = row?.regularMarketPrice;
-  if (price == null || !Number.isFinite(price)) {
+  if (!row || price == null || !Number.isFinite(price)) {
     return { ticker, price: 0, error: "Cotação indisponível" };
   }
   const asOf =

@@ -1,0 +1,11 @@
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    # Runtime tokens from .env.local (not baked into the image).
+    # Do not also list empty BRAPI_TOKEN/BOLSAI_API_KEY under `environment` —
+    # unset shell vars would override and blank these.
+    env_file:
+      - path: .env.local
+        required: false

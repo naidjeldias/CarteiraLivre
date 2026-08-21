@@ -201,8 +201,9 @@ export default function HomePage() {
             </button>
             {brapiConfigured === false && (
               <p className="hint">
-                Configure <code>BRAPI_TOKEN</code> em <code>.env.local</code> e reinicie o{" "}
-                <code>npm run dev</code>. Veja <code>.env.example</code>.
+                Configure <code>BRAPI_TOKEN</code> em <code>.env.local</code> e reinicie (
+                <code>npm run dev</code> ou <code>docker compose up</code>). Veja{" "}
+                <code>.env.example</code>.
               </p>
             )}
             {brapiConfigured && quotesAt && (

@@ -32,6 +32,16 @@ npm run dev
 
 Abra http://localhost:3000 e envie seu `.xlsx` da B3.
 
+### Docker
+
+```bash
+cp .env.example .env.local   # opcional: tokens (BRAPI_TOKEN, BOLSAI_API_KEY)
+docker compose up --build
+```
+
+Abra http://localhost:3000. Tokens entram em runtime via `.env.local` — não vão para a imagem.
+Depois de editar `.env.local`, rode `docker compose up -d --force-recreate` para aplicar.
+
 ### Cotações e dividendos
 
 | Dado | Fonte padrão | Alternativa |
