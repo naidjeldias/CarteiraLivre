@@ -29,6 +29,7 @@ import {
   type QuotesMap,
 } from "@/lib/quotes";
 import type { PortfolioSnapshot } from "@/lib/types";
+import { PortfolioAssistant } from "@/components/PortfolioAssistant";
 
 function openFiiDetail(ticker: string) {
   // Mesma aba: histórico do browser + snapshot no localStorage
@@ -241,6 +242,8 @@ export default function HomePage() {
             <AllocationBars title="FIIs por tipo (papel / tijolo…)" slices={allocationByFiiTipo(snapshot)} />
             <AllocationBars title="FIIs por segmento" slices={allocationByFiiSegmento(snapshot)} />
           </div>
+
+          <PortfolioAssistant snapshot={snapshot} />
 
           <section className="panel" style={{ marginTop: "1rem" }}>
             <h2>Fundos imobiliários</h2>
