@@ -325,7 +325,12 @@ export function PortfolioAssistant({ snapshot }: { snapshot: PortfolioSnapshot }
             <span className="assistant-role">{m.role === "user" ? "Você" : "Assistente"}</span>
             <div className="assistant-bubble">
               {m.role === "assistant" ? (
-                m.content ? <AssistantMessageBody text={m.content} /> : null
+                <>
+                  {m.content ? <AssistantMessageBody text={m.content} /> : null}
+                  {busy && i === messages.length - 1 && m.content ? (
+                    <span className="assistant-caret" aria-hidden="true" />
+                  ) : null}
+                </>
               ) : (
                 m.content
               )}

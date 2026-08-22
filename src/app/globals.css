@@ -821,6 +821,27 @@ tr.clickable:hover {
   border-bottom: 1px solid var(--border);
 }
 
+.assistant-caret {
+  display: inline-block;
+  width: 0.45em;
+  height: 1em;
+  margin-top: 0.2rem;
+  border-radius: 1px;
+  background: var(--accent);
+  animation: assistant-caret-blink 0.85s step-end infinite;
+  vertical-align: text-bottom;
+}
+
+@keyframes assistant-caret-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
 .assistant-thinking {
   display: flex;
   align-items: center;

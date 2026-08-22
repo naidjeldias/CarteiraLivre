@@ -184,6 +184,17 @@ function encodeSse(event: SseEvent): string {
   return `data: ${JSON.stringify(event)}\n\n`;
 }
 
+function tokenizeForStream(text: string): string[] {
+  return text.match(/\S+\s*|\s+/g) ?? (text ? [text] : []);
+}
+
+async function emitTokenDeltas(text: string, send: (event: SseEvent) => void) {
+  for (const token of tokenizeForStream(text)) {
+    send({ type: "delta", text: token });
+    await new Promise((resolve) => setTimeout(resolve, token.trim() ? 18 : 8));
+  }
+}
+
 function extractFunctionCalls(response: GenerateContentResponse): Array<{
   name: string;
   args: Record<string, unknown>;
@@ -246,6 +257,45 @@ export function runAgentSse(req: AgentRequest): ReadableStream<Uint8Array> {
   });
 }
 
+async function streamGeminiTurn(
+  ai: ReturnType<typeof createGeminiClient>,
+  model: string,
+  contents: Content[],
+  config: Record<string, unknown>,
+  send: (event: SseEvent) => void
+): Promise<{ calls: ReturnType<typeof extractFunctionCalls>; streamedText: boolean }> {
+  const stream = await ai.models.generateContentStream({ model, contents, config });
+  const calls: ReturnType<typeof extractFunctionCalls> = [];
+  let streamedText = false;
+  let modelContent: Content | undefined;
+
+  for await (const chunk of stream) {
+    if (chunk.candidates?.[0]?.content) {
+      modelContent = chunk.candidates[0].content;
+    }
+    const chunkCalls = extractFunctionCalls(chunk);
+    if (chunkCalls.length) {
+      for (const call of chunkCalls) {
+        if (!calls.some((c) => c.name === call.name && JSON.stringify(c.args) === JSON.stringify(call.args))) {
+          calls.push(call);
+        }
+      }
+      continue;
+    }
+    const piece = chunk.text;
+    if (piece && calls.length === 0) {
+      streamedText = true;
+      await emitTokenDeltas(piece, send);
+    }
+  }
+
+  if (calls.length && modelContent) {
+    contents.push(modelContent);
+  }
+
+  return { calls, streamedText };
+}
+
 async function runAgentLoop(req: AgentRequest, send: (event: SseEvent) => void) {
   const ai = createGeminiClient();
   const model = req.model;
@@ -262,19 +312,19 @@ async function runAgentLoop(req: AgentRequest, send: (event: SseEvent) => void) 
   };
 
   for (let i = 0; i < MAX_TOOL_ITERS; i++) {
-    const response = await ai.models.generateContent({
-      model,
-      contents,
-      config: baseConfig,
-    });
-
-    const calls = extractFunctionCalls(response);
+    const { calls, streamedText } = await streamGeminiTurn(ai, model, contents, baseConfig, send);
     if (calls.length > 0) {
       const labels = [...new Set(calls.map((c) => TOOL_STATUS[c.name] || `Usando ${c.name}…`))];
       for (const message of labels) send({ type: "status", message });
 
-      const modelContent = response.candidates?.[0]?.content;
-      if (modelContent) contents.push(modelContent);
+      if (!contents[contents.length - 1] || contents[contents.length - 1].role !== "model") {
+        contents.push({
+          role: "model",
+          parts: calls.map((call) => ({
+            functionCall: { name: call.name, args: call.args, id: call.id },
+          })),
+        });
+      }
 
       const responseParts: Part[] = [];
       for (const call of calls) {
@@ -293,35 +343,24 @@ async function runAgentLoop(req: AgentRequest, send: (event: SseEvent) => void) 
       continue;
     }
 
-    const text = response.text?.trim();
-    if (text) {
-      send({ type: "delta", text });
-      return;
-    }
+    if (streamedText) return;
   }
 
   send({ type: "status", message: "Redigindo resposta…" });
-  const finalStream = await ai.models.generateContentStream({
+  const { streamedText } = await streamGeminiTurn(
+    ai,
     model,
     contents,
-    config: {
+    {
       systemInstruction,
       toolConfig: {
         functionCallingConfig: { mode: FunctionCallingConfigMode.NONE },
       },
       automaticFunctionCalling: { disable: true },
     },
-  });
-
-  let emitted = false;
-  for await (const chunk of finalStream) {
-    const piece = chunk.text;
-    if (piece) {
-      emitted = true;
-      send({ type: "delta", text: piece });
-    }
-  }
-  if (!emitted) {
+    send
+  );
+  if (!streamedText) {
     send({
       type: "error",
       message: "O modelo não devolveu texto. Tente perguntar de outro jeito.",
