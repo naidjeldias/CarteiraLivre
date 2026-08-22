@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { friendlyAgentError } from "@/lib/agent/errors";
+import { AssistantMessageBody } from "@/lib/agent/format-message";
 import { DEFAULT_GEMINI_MODEL, GEMINI_MODELS, type GeminiModelOption } from "@/lib/agent/models";
 import { buildPortfolioSummary } from "@/lib/agent/portfolio-summary";
 import type { PortfolioSnapshot } from "@/lib/types";
@@ -18,6 +20,88 @@ const SUGGESTIONS = [
   "Estou concentrado?",
   "Papel vs tijolo?",
 ];
+
+function ModelPicker({
+  models,
+  value,
+  onChange,
+  disabled,
+}: {
+  models: GeminiModelOption[];
+  value: string;
+  onChange: (id: string) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const current = models.find((m) => m.id === value) ?? models[0];
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="assistant-model" ref={rootRef}>
+      <button
+        type="button"
+        className="assistant-model-btn"
+        disabled={disabled}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        title="Modelo Gemini"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span>{current?.label ?? "Modelo"}</span>
+      </button>
+      {open && (
+        <ul className="assistant-model-list" role="listbox" aria-label="Modelo Gemini">
+          {models.map((m) => (
+            <li key={m.id}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={m.id === value}
+                className={m.id === value ? "is-selected" : undefined}
+                onClick={() => {
+                  onChange(m.id);
+                  setOpen(false);
+                }}
+              >
+                <span>{m.label}</span>
+                {m.hint && <span className="assistant-model-hint">{m.hint}</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ThinkingDots({ label }: { label?: string | null }) {
+  return (
+    <div className="assistant-thinking" role="status" aria-live="polite">
+      <span className="assistant-dots" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </span>
+      <span className="assistant-thinking-label">{label || "Pensando…"}</span>
+    </div>
+  );
+}
 
 async function fetchAgentStatus(): Promise<{
   configured: boolean;
@@ -45,6 +129,7 @@ function parseSseBuffer(buffer: string): { events: unknown[]; rest: string } {
 }
 
 export function PortfolioAssistant({ snapshot }: { snapshot: PortfolioSnapshot }) {
+  const [open, setOpen] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -54,6 +139,7 @@ export function PortfolioAssistant({ snapshot }: { snapshot: PortfolioSnapshot }
   const [model, setModel] = useState(DEFAULT_GEMINI_MODEL);
   const [models, setModels] = useState<GeminiModelOption[]>(GEMINI_MODELS);
   const listRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     fetchAgentStatus()
@@ -67,21 +153,29 @@ export function PortfolioAssistant({ snapshot }: { snapshot: PortfolioSnapshot }
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
-  }, [messages, status]);
+  }, [messages, status, open]);
 
-  async function send(text: string) {
+  async function send(text: string, history: ChatMessage[] = messages) {
     const content = text.trim();
     if (!content || busy) return;
 
-    const nextMessages: ChatMessage[] = [...messages, { role: "user", content }];
+    abortRef.current?.abort();
+    const abort = new AbortController();
+    abortRef.current = abort;
+    const timeout = window.setTimeout(() => abort.abort(), 90_000);
+
+    setOpen(true);
+    const nextMessages: ChatMessage[] = [...history, { role: "user", content }];
     setMessages(nextMessages);
     setInput("");
     setBusy(true);
     setError(null);
     setStatus(null);
 
-    const assistant: ChatMessage = { role: "assistant", content: "" };
-    setMessages([...nextMessages, assistant]);
+    const fail = (err: unknown) => {
+      setMessages(nextMessages);
+      setError(friendlyAgentError(err));
+    };
 
     try {
       const res = await fetch("/api/agent/chat", {
@@ -92,25 +186,24 @@ export function PortfolioAssistant({ snapshot }: { snapshot: PortfolioSnapshot }
           portfolio: buildPortfolioSummary(snapshot),
           model,
         }),
+        signal: abort.signal,
       });
 
       if (!res.ok) {
-        let message = `Falha no assistente (${res.status}).`;
+        let raw = `HTTP ${res.status}`;
         try {
-          const data = (await res.json()) as { error?: string };
-          if (data.error) message = data.error;
+          const data = (await res.json()) as { error?: string; configured?: boolean };
+          if (data.error) raw = data.error;
+          if (res.status === 503 && data.configured === false) setConfigured(false);
         } catch {
-          // keep default
+          // keep raw
         }
-        if (res.status === 503) setConfigured(false);
-        setMessages(nextMessages);
-        setError(message);
+        fail(raw);
         return;
       }
 
       if (!res.body) {
-        setMessages(nextMessages);
-        setError("Resposta vazia do assistente.");
+        fail("Resposta vazia do assistente.");
         return;
       }
 
@@ -134,23 +227,28 @@ export function PortfolioAssistant({ snapshot }: { snapshot: PortfolioSnapshot }
           } else if (ev.type === "delta" && ev.text) {
             assembled += ev.text;
             setStatus(null);
-            const snapshotMsgs = [...nextMessages, { role: "assistant" as const, content: assembled }];
-            setMessages(snapshotMsgs);
+            setMessages([...nextMessages, { role: "assistant", content: assembled }]);
           } else if (ev.type === "error" && ev.message) {
             hadError = true;
-            setError(ev.message);
+            fail(ev.message);
+            void reader.cancel();
+            return;
           }
         }
       }
 
-      if (!assembled) {
-        setMessages(nextMessages);
-        if (!hadError) setError("O assistente não devolveu texto.");
+      if (!assembled && !hadError) {
+        fail("O assistente não devolveu texto.");
       }
     } catch (e) {
-      setMessages(nextMessages);
-      setError(e instanceof Error ? e.message : "Falha ao falar com o assistente.");
+      if (abort.signal.aborted) {
+        fail("A resposta demorou demais. Tente de novo.");
+      } else {
+        fail(e);
+      }
     } finally {
+      window.clearTimeout(timeout);
+      if (abortRef.current === abort) abortRef.current = null;
       setBusy(false);
       setStatus(null);
     }
@@ -161,64 +259,112 @@ export function PortfolioAssistant({ snapshot }: { snapshot: PortfolioSnapshot }
     void send(input);
   }
 
+  if (!open) {
+    return (
+      <button type="button" className="assistant-fab" onClick={() => setOpen(true)}>
+        Assistente
+        {messages.length > 0 && <span className="assistant-fab-dot" />}
+      </button>
+    );
+  }
+
   return (
-    <section className="panel assistant" style={{ marginTop: "1rem" }}>
-      <h2>Assistente da carteira</h2>
-      <p className="hint">
-        Ao enviar, um <strong>resumo compacto</strong> da carteira (tickers, quantidades e valores —
-        não o arquivo <code>.xlsx</code>) vai para o modelo Gemini. Respostas são educativas, não
-        recomendação de investimento.
-      </p>
+    <section className="assistant-float" aria-label="Assistente da carteira">
+      <header className="assistant-float-head">
+        <h2>Assistente</h2>
+        <ModelPicker
+          models={models}
+          value={model}
+          onChange={setModel}
+          disabled={busy || configured === false}
+        />
+        <button
+          type="button"
+          className="assistant-min"
+          onClick={() => setOpen(false)}
+          aria-label="Minimizar"
+          title="Minimizar"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path
+              fill="currentColor"
+              d="M6.7 9.3a1 1 0 0 1 1.4 0L12 13.17l3.9-3.88a1 1 0 1 1 1.4 1.42l-4.6 4.58a1 1 0 0 1-1.4 0L6.7 10.7a1 1 0 0 1 0-1.4Z"
+            />
+          </svg>
+        </button>
+      </header>
+
       {configured === false && (
-        <p className="hint">
-          Configure <code>GEMINI_API_KEY</code> em <code>.env.local</code> e recrie o container (
-          <code>docker compose up -d --force-recreate</code>). Veja <code>.env.example</code>.
+        <p className="hint assistant-config-hint">
+          Configure <code>GEMINI_API_KEY</code> em <code>.env.local</code> e recrie o container.
         </p>
       )}
 
-      <label className="assistant-model">
-        <span>Modelo</span>
-        <select
-          value={model}
-          disabled={busy || configured === false}
-          onChange={(e) => setModel(e.target.value)}
-        >
-          {models.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.hint ? `${m.label} — ${m.hint}` : m.label}
-            </option>
+      {messages.length === 0 && (
+        <div className="assistant-chips">
+          {SUGGESTIONS.map((q) => (
+            <button
+              key={q}
+              type="button"
+              className="btn btn-ghost assistant-chip"
+              disabled={busy || configured === false}
+              onClick={() => void send(q)}
+            >
+              {q}
+            </button>
           ))}
-        </select>
-      </label>
-
-      <div className="assistant-chips">
-        {SUGGESTIONS.map((q) => (
-          <button
-            key={q}
-            type="button"
-            className="btn btn-ghost assistant-chip"
-            disabled={busy || configured === false}
-            onClick={() => void send(q)}
-          >
-            {q}
-          </button>
-        ))}
-      </div>
+        </div>
+      )}
 
       <div className="assistant-log" ref={listRef}>
         {messages.length === 0 && (
-          <p className="hint">Pergunte sobre alocação, concentração ou um FII da carteira.</p>
+          <p className="hint">Pergunte sobre alocação, concentração ou um FII.</p>
         )}
         {messages.map((m, i) => (
           <div key={`${m.role}-${i}`} className={`assistant-msg ${m.role}`}>
             <span className="assistant-role">{m.role === "user" ? "Você" : "Assistente"}</span>
-            <div className="assistant-bubble">{m.content || (busy && i === messages.length - 1 ? "…" : "")}</div>
+            <div className="assistant-bubble">
+              {m.role === "assistant" ? (
+                m.content ? <AssistantMessageBody text={m.content} /> : null
+              ) : (
+                m.content
+              )}
+            </div>
           </div>
         ))}
-        {status && <p className="hint assistant-status">{status}</p>}
+        {busy && !(messages[messages.length - 1]?.role === "assistant" && messages[messages.length - 1].content) && (
+          <div className="assistant-msg assistant">
+            <span className="assistant-role">Assistente</span>
+            <div className="assistant-bubble">
+              <ThinkingDots label={status} />
+            </div>
+          </div>
+        )}
       </div>
 
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <div className="assistant-banner" role="alert">
+          <p>{error}</p>
+          <div className="assistant-banner-actions">
+            <button type="button" className="btn btn-ghost" onClick={() => setError(null)}>
+              Fechar
+            </button>
+            {messages[messages.length - 1]?.role === "user" && (
+              <button
+                type="button"
+                className="btn"
+                disabled={busy}
+                onClick={() => {
+                  const last = messages[messages.length - 1];
+                  void send(last.content, messages.slice(0, -1));
+                }}
+              >
+                Tentar de novo
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       <form className="assistant-form" onSubmit={onSubmit}>
         <input
@@ -226,11 +372,11 @@ export function PortfolioAssistant({ snapshot }: { snapshot: PortfolioSnapshot }
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Pergunte sobre a carteira…"
-          disabled={busy || configured === false}
+          disabled={configured === false}
           maxLength={4000}
         />
-        <button className="btn" type="submit" disabled={busy || configured === false || !input.trim()}>
-          {busy ? "Enviando…" : "Enviar"}
+        <button className="btn" type="submit" disabled={configured === false || !input.trim() || busy}>
+          {busy ? "…" : "Enviar"}
         </button>
       </form>
     </section>
