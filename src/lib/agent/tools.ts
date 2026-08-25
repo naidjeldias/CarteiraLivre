@@ -88,6 +88,40 @@ export const AGENT_TOOLS: FunctionDeclaration[] = [
       },
     },
   },
+  {
+    name: "list_recent_disclosures",
+    description:
+      "Linha do tempo de fatos relevantes, informes e relatórios já baixados no cache local. Sem ticker, usa os FIIs da carteira. Não invente eventos.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        ticker: { type: "string", description: "Um FII (ex.: KNRI11)." },
+        tickers: {
+          type: "array",
+          items: { type: "string" },
+          description: "Vários FIIs. Se vazio e sem ticker, usa a carteira.",
+        },
+        days: {
+          type: "integer",
+          description: "Janela em dias. Padrão: 180.",
+        },
+      },
+    },
+  },
+  {
+    name: "search_fii_documents",
+    description:
+      "Busca trechos dos relatórios e informes já extraídos de um FII (vacância, dívida, etc.). Cite título, data e URL.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        ticker: { type: "string", description: "Ticker do FII." },
+        query: { type: "string", description: "Pergunta ou termos (ex.: vacância)." },
+        topK: { type: "integer", description: "Quantidade de trechos (1–8). Padrão: 5." },
+      },
+      required: ["ticker", "query"],
+    },
+  },
 ];
 
 export const TOOL_STATUS: Record<string, string> = {
@@ -96,4 +130,6 @@ export const TOOL_STATUS: Record<string, string> = {
   get_fii_meta: "Consultando catálogo do FII…",
   get_fii_detail: "Buscando detalhes do FII…",
   get_quotes: "Buscando cotações…",
+  list_recent_disclosures: "Consultando comunicados…",
+  search_fii_documents: "Buscando nos documentos do FII…",
 };

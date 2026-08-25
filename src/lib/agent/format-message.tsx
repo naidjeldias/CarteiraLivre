@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 function formatInline(text: string, keyPrefix: string): ReactNode[] {
-  const re = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*\n]+\*)/g;
+  const re = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*\n]+\*|\[[^\]]+\]\([^)]+\))/g;
   const nodes: ReactNode[] = [];
   let last = 0;
   let i = 0;
@@ -12,7 +12,20 @@ function formatInline(text: string, keyPrefix: string): ReactNode[] {
     const key = `${keyPrefix}-${i++}`;
     if (tok.startsWith("**")) nodes.push(<strong key={key}>{tok.slice(2, -2)}</strong>);
     else if (tok.startsWith("`")) nodes.push(<code key={key}>{tok.slice(1, -1)}</code>);
-    else nodes.push(<em key={key}>{tok.slice(1, -1)}</em>);
+    else if (tok.startsWith("*")) nodes.push(<em key={key}>{tok.slice(1, -1)}</em>);
+    else if (tok.startsWith("[")) {
+      const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(tok);
+      if (link) {
+        const [, label, href] = link;
+        nodes.push(
+          <a key={key} href={href} target="_blank" rel="noreferrer" className="assistant-md-link">
+            {label}
+          </a>
+        );
+      } else {
+        nodes.push(tok);
+      }
+    } else nodes.push(tok);
     last = match.index + tok.length;
   }
   if (last < text.length) nodes.push(text.slice(last));

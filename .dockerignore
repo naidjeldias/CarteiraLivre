@@ -9,7 +9,7 @@ coverage
 .env*.local
 *.xlsx
 !**/fixtures/**/*.xlsx
-data/uploads/
+data
 *.pem
 *.tsbuildinfo
 npm-debug.log*

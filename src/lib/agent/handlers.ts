@@ -8,6 +8,8 @@ import { lookupFii } from "@/lib/fii-catalog";
 import { buildFiiDetail } from "@/lib/fii-detail";
 import { fetchQuotesForSymbols, isBrapiConfigured, normalizeQuoteSymbols } from "@/lib/quotes-server";
 import type { AssetClass } from "@/lib/types";
+import { listDisclosures, readTickerIndex } from "@/lib/disclosures/store";
+import { searchFiiDocuments } from "@/lib/rag/search";
 import {
   snapshotFromSummary,
   type PortfolioSummary,
@@ -48,6 +50,10 @@ export async function executeTool(
       return handleFiiDetail(args);
     case "get_quotes":
       return handleQuotes(args, summary);
+    case "list_recent_disclosures":
+      return handleRecentDisclosures(args, summary);
+    case "search_fii_documents":
+      return handleSearchDocuments(args);
     default:
       return { error: `Ferramenta desconhecida: ${name}` };
   }
@@ -161,4 +167,107 @@ async function handleQuotes(args: Record<string, unknown>, summary: PortfolioSum
   }
 
   return fetchQuotesForSymbols(symbols);
+}
+
+function handleRecentDisclosures(args: Record<string, unknown>, summary: PortfolioSummary) {
+  const days = Math.min(180, Math.max(7, Math.round(asNumber(args.days, 180))));
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
+  const requested: string[] = [];
+  const single = asString(args.ticker).toUpperCase();
+  if (single) requested.push(single);
+  if (Array.isArray(args.tickers)) {
+    for (const t of args.tickers) {
+      const v = asString(t).toUpperCase();
+      if (v) requested.push(v);
+    }
+  }
+  const unique = [...new Set(requested.filter((t) => isValidB3Ticker(t)))];
+  const fromPortfolio = summary.positions
+    .filter((p) => p.assetClass === "fii" && isValidB3Ticker(p.ticker))
+    .map((p) => p.ticker.toUpperCase());
+  const tickers = (unique.length ? unique : [...new Set(fromPortfolio)]).slice(0, 20);
+  if (tickers.length === 0) {
+    return { error: "Nenhum ticker de FII para consultar.", days, disclosures: [], unsynced: [] };
+  }
+
+  const disclosures: Array<{
+    ticker: string;
+    type: string;
+    title: string;
+    publishedAt: string;
+    url: string;
+  }> = [];
+  const unsynced: string[] = [];
+
+  for (const ticker of tickers) {
+    const index = readTickerIndex(ticker);
+    if (!index) {
+      unsynced.push(ticker);
+      continue;
+    }
+    const items = listDisclosures(ticker).filter((d) => d.publishedAt >= cutoff);
+    if (items.length === 0) {
+      disclosures.push({
+        ticker,
+        type: "outro",
+        title: "Cache local sem comunicados neste período",
+        publishedAt: index.syncedAt.slice(0, 10),
+        url: "",
+      });
+      continue;
+    }
+    for (const item of items.slice(0, 12)) {
+      disclosures.push({
+        ticker,
+        type: item.type,
+        title: item.title,
+        publishedAt: item.publishedAt,
+        url: item.url,
+      });
+    }
+  }
+
+  disclosures.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+  return {
+    days,
+    tickers,
+    count: disclosures.length,
+    disclosures: disclosures.slice(0, 40),
+    unsynced,
+    note:
+      unsynced.length > 0
+        ? "Alguns FIIs ainda não têm cache local. Peça para abrir a página do FII no app para sincronizar."
+        : undefined,
+  };
+}
+
+async function handleSearchDocuments(args: Record<string, unknown>) {
+  const ticker = asString(args.ticker).toUpperCase();
+  const query = asString(args.query);
+  const topK = Math.min(8, Math.max(1, Math.round(asNumber(args.topK, 5))));
+  if (!isValidB3Ticker(ticker)) return { error: "Ticker inválido." };
+  if (!query) return { error: "Informe a consulta." };
+  const index = readTickerIndex(ticker);
+  if (!index) {
+    return {
+      error: `Não há documentos em cache para ${ticker}. Abra /fii/${ticker} para sincronizar e tente de novo.`,
+      hits: [],
+    };
+  }
+  const hits = await searchFiiDocuments(ticker, query, topK);
+  return {
+    ticker,
+    query,
+    hits: hits.map((h) => ({
+      title: h.title,
+      publishedAt: h.publishedAt,
+      url: h.url,
+      text: h.text,
+      score: Number(h.score.toFixed(3)),
+    })),
+    note:
+      hits.length === 0
+        ? "Nenhum trecho encontrado no cache. O PDF pode não ter sido extraído; use o título/URL da lista de comunicados."
+        : undefined,
+  };
 }

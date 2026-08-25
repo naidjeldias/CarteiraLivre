@@ -22,6 +22,7 @@ import type { PriceSignal } from "@/lib/fii-score";
 import { formatSignedPct } from "@/lib/quotes";
 import type { FiiTipo } from "@/lib/types";
 import { FiiAnalysisPanel } from "@/components/FiiAnalysisPanel";
+import { FiiDisclosuresSection } from "@/components/FiiDisclosuresSection";
 
 interface QuoteInfo {
   price: number;
@@ -453,6 +454,8 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
           bolsaiConfigured={Boolean(data.providers?.bolsaiConfigured)}
         />
       )}
+
+      <FiiDisclosuresSection ticker={ticker} />
     </main>
   );
 }
