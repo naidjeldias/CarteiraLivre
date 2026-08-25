@@ -1,11 +1,12 @@
 "use client";
 
-import { formatBRL } from "@/lib/allocation";
+import { formatBRLSensitive, MASKED_PCT } from "@/lib/format-sensitive";
 import type { FiiFundamentals } from "@/lib/fii-fundamentals";
 import type { PriceSignal } from "@/lib/fii-score";
 import type { FiiTipo } from "@/lib/types";
 
-function fmtPct(n: number | null | undefined, digits = 1): string {
+function fmtPct(n: number | null | undefined, visible: boolean, digits = 1): string {
+  if (!visible) return MASKED_PCT;
   if (n == null || !Number.isFinite(n)) return "—";
   return `${n.toLocaleString("pt-BR", {
     minimumFractionDigits: digits,
@@ -40,13 +41,20 @@ export function FiiAnalysisPanel({
   fundamentals,
   priceSignal,
   bolsaiConfigured,
+  showValues = false,
 }: {
   tipo: FiiTipo;
   fundamentals: FiiFundamentals | null;
   priceSignal: PriceSignal;
   bolsaiConfigured: boolean;
+  showValues?: boolean;
 }) {
   const f = fundamentals;
+  const pct = (n: number | null | undefined, digits = 1) => fmtPct(n, showValues, digits);
+  const num = (n: number | null | undefined) =>
+    !showValues ? "******" : fmtNum(n);
+  const ratio = (n: number | null | undefined) =>
+    !showValues ? "****" : n != null && Number.isFinite(n) ? n.toFixed(2) : "—";
 
   return (
     <div className="analysis-stack">
@@ -61,32 +69,38 @@ export function FiiAnalysisPanel({
         )}
 
         <div className="metrics-grid">
-          <Metric label="P/VP" value={f?.pvp != null ? f.pvp.toFixed(2) : "—"} />
+          <Metric label="P/VP" value={ratio(f?.pvp)} />
           <Metric
             label="DY 12m"
-            value={fmtPct(f?.dividendYieldTtm)}
+            value={pct(f?.dividendYieldTtm)}
             hint={f?.dividendYieldTtm == null ? "pode vir dos proventos" : undefined}
           />
           <Metric
             label="VP / cota"
-            value={f?.bookValuePerShare != null ? formatBRL(f.bookValuePerShare) : "—"}
+            value={
+              f?.bookValuePerShare != null
+                ? formatBRLSensitive(f.bookValuePerShare, showValues)
+                : "—"
+            }
           />
-          <Metric label="Cotistas" value={fmtNum(f?.totalShareholders)} />
+          <Metric label="Cotistas" value={num(f?.totalShareholders)} />
         </div>
 
         {(tipo === "tijolo" || tipo === "desenvolvimento" || f?.vacancyPct != null) && (
           <>
             <h3 className="chart-subtitle">Tijolo / imóveis</h3>
             <div className="metrics-grid">
-              <Metric label="Vacância" value={fmtPct(f?.vacancyPct)} />
-              <Metric label="Área locada" value={fmtPct(f?.leasedPct)} />
-              <Metric label="Imóveis" value={fmtNum(f?.propertyCount)} />
+              <Metric label="Vacância" value={pct(f?.vacancyPct)} />
+              <Metric label="Área locada" value={pct(f?.leasedPct)} />
+              <Metric label="Imóveis" value={num(f?.propertyCount)} />
               <Metric
                 label="ABL total"
                 value={
-                  f?.totalAreaSqm != null
-                    ? `${Math.round(f.totalAreaSqm).toLocaleString("pt-BR")} m²`
-                    : "—"
+                  !showValues
+                    ? "******"
+                    : f?.totalAreaSqm != null
+                      ? `${Math.round(f.totalAreaSqm).toLocaleString("pt-BR")} m²`
+                      : "—"
                 }
               />
             </div>
@@ -106,8 +120,8 @@ export function FiiAnalysisPanel({
                       <tr key={p.name + (p.address || "")}>
                         <td>{p.name}</td>
                         <td>{p.address || "—"}</td>
-                        <td className="num">{fmtPct(p.revenuePct)}</td>
-                        <td className="num">{fmtPct(p.vacancyPct)}</td>
+                        <td className="num">{pct(p.revenuePct)}</td>
+                        <td className="num">{pct(p.vacancyPct)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -121,9 +135,9 @@ export function FiiAnalysisPanel({
           <>
             <h3 className="chart-subtitle">Papel / crédito</h3>
             <div className="metrics-grid">
-              <Metric label="Inadimplência" value={fmtPct(f?.delinquencyPct)} />
-              <Metric label="% CRI" value={fmtPct(f?.assetComposition?.criPct)} />
-              <Metric label="% caixa" value={fmtPct(f?.assetComposition?.cashPct)} />
+              <Metric label="Inadimplência" value={pct(f?.delinquencyPct)} />
+              <Metric label="% CRI" value={pct(f?.assetComposition?.criPct)} />
+              <Metric label="% caixa" value={pct(f?.assetComposition?.cashPct)} />
               <Metric label="Mandato" value={f?.mandate || "—"} />
             </div>
           </>
@@ -133,10 +147,10 @@ export function FiiAnalysisPanel({
           <>
             <h3 className="chart-subtitle">FoF / híbrido</h3>
             <div className="metrics-grid">
-              <Metric label="% em FIIs" value={fmtPct(f?.assetComposition?.fiiHoldingsPct)} />
-              <Metric label="% imóveis" value={fmtPct(f?.assetComposition?.realEstateLeasedPct)} />
-              <Metric label="% CRI" value={fmtPct(f?.assetComposition?.criPct)} />
-              <Metric label="% ações" value={fmtPct(f?.assetComposition?.stocksPct)} />
+              <Metric label="% em FIIs" value={pct(f?.assetComposition?.fiiHoldingsPct)} />
+              <Metric label="% imóveis" value={pct(f?.assetComposition?.realEstateLeasedPct)} />
+              <Metric label="% CRI" value={pct(f?.assetComposition?.criPct)} />
+              <Metric label="% ações" value={pct(f?.assetComposition?.stocksPct)} />
             </div>
           </>
         )}
@@ -156,8 +170,8 @@ export function FiiAnalysisPanel({
           <div className={signalClass(priceSignal.label)}>
             <p className="stat-label">Score</p>
             <p className="score-number">
-              {priceSignal.total != null ? priceSignal.total : "—"}
-              {priceSignal.total != null && <span className="score-max">/100</span>}
+              {!showValues ? "—" : priceSignal.total != null ? priceSignal.total : "—"}
+              {showValues && priceSignal.total != null && <span className="score-max">/100</span>}
             </p>
             <p className="score-label-text">{priceSignal.label}</p>
           </div>
@@ -173,7 +187,7 @@ export function FiiAnalysisPanel({
                   <span className="hint"> · peso {item.weight}</span>
                 </span>
                 <span className="num">
-                  {item.score != null ? `${Math.round(item.score)}` : "n/d"}
+                  {!showValues ? "—" : item.score != null ? `${Math.round(item.score)}` : "n/d"}
                 </span>
               </div>
               <div className="bar-track">

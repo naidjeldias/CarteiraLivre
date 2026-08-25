@@ -75,12 +75,84 @@ main {
   margin: 0;
 }
 
+.page-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.page-top-intro {
+  flex: 1;
+  min-width: 0;
+}
+
+.page-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.page-top-bar .back-link {
+  margin-bottom: 0;
+}
+
+.page-values-toggle {
+  flex-shrink: 0;
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem 1rem;
   margin-top: 1.25rem;
+}
+
+.values-toggle {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--muted);
+  border-radius: 10px;
+  padding: 0.65rem 0.85rem;
+  min-width: 4.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  font: inherit;
+  flex-shrink: 0;
+}
+
+.values-toggle:hover {
+  color: var(--text);
+  border-color: rgba(61, 154, 106, 0.45);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.values-toggle-icon {
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.values-toggle-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.detail-price {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
 }
 
 .btn {
@@ -308,10 +380,6 @@ tr.clickable:hover {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-}
-
-.detail-price {
-  text-align: right;
 }
 
 .tabs {
