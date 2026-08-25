@@ -28,8 +28,11 @@ import type { PriceSignal } from "@/lib/fii-score";
 import type { FiiTipo } from "@/lib/types";
 import { FiiAnalysisPanel } from "@/components/FiiAnalysisPanel";
 import { FiiDisclosuresSection } from "@/components/FiiDisclosuresSection";
+import { PortfolioAssistant } from "@/components/PortfolioAssistant";
 import { ValuesToggle } from "@/components/ValuesToggle";
 import { useShowValues } from "@/hooks/useShowValues";
+import { loadPortfolioSnapshot } from "@/lib/portfolio-storage";
+import type { PortfolioSnapshot } from "@/lib/types";
 
 interface QuoteInfo {
   price: number;
@@ -86,8 +89,13 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
   const [data, setData] = useState<DetailPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [snapshot, setSnapshot] = useState<PortfolioSnapshot | null>(null);
   const meta = lookupFii(ticker);
   const { showValues, toggleShowValues } = useShowValues();
+
+  useEffect(() => {
+    setSnapshot(loadPortfolioSnapshot());
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -474,6 +482,8 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
       )}
 
       <FiiDisclosuresSection ticker={ticker} />
+
+      <PortfolioAssistant snapshot={snapshot} focusTicker={ticker} />
     </main>
   );
 }

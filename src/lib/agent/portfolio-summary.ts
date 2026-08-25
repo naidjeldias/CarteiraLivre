@@ -49,6 +49,19 @@ function toSummaryPosition(p: Position): SummaryPosition {
   return row;
 }
 
+/** Empty summary when the user has not imported a portfolio (e.g. direct FII page visit). */
+export function emptyPortfolioSummary(): PortfolioSummary {
+  return {
+    importedAt: new Date().toISOString(),
+    sourceFileName: "(sem carteira importada)",
+    positionCount: 0,
+    totalValue: 0,
+    positions: [],
+    allocationByAssetClass: [],
+    allocationByFiiTipo: [],
+  };
+}
+
 /** Compact JSON-safe view of the snapshot. Safe to call in the browser. */
 export function buildPortfolioSummary(snapshot: PortfolioSnapshot): PortfolioSummary {
   const positions = [...snapshot.positions]

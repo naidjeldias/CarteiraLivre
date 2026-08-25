@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { friendlyAgentError } from "@/lib/agent/errors";
 import { AssistantMessageBody } from "@/lib/agent/format-message";
 import { DEFAULT_GEMINI_MODEL, GEMINI_MODELS, type GeminiModelOption } from "@/lib/agent/models";
-import { buildPortfolioSummary } from "@/lib/agent/portfolio-summary";
+import {
+  buildPortfolioSummary,
+  emptyPortfolioSummary,
+} from "@/lib/agent/portfolio-summary";
 import type { PortfolioSnapshot } from "@/lib/types";
 
 type Role = "user" | "assistant";
@@ -14,12 +17,21 @@ interface ChatMessage {
   content: string;
 }
 
-const SUGGESTIONS = [
+const PORTFOLIO_SUGGESTIONS = [
   "Quanto % em FIIs?",
   "Minha maior posição?",
   "Estou concentrado?",
   "Papel vs tijolo?",
 ];
+
+function fiiSuggestions(ticker: string): string[] {
+  return [
+    `Como está ${ticker}?`,
+    "Vacância e P/VP",
+    "Últimos comunicados",
+    "DY e proventos",
+  ];
+}
 
 function ModelPicker({
   models,
@@ -128,7 +140,18 @@ function parseSseBuffer(buffer: string): { events: unknown[]; rest: string } {
   return { events, rest };
 }
 
-export function PortfolioAssistant({ snapshot }: { snapshot: PortfolioSnapshot }) {
+export function PortfolioAssistant({
+  snapshot,
+  focusTicker,
+}: {
+  snapshot: PortfolioSnapshot | null;
+  focusTicker?: string;
+}) {
+  const portfolioSummary = useMemo(
+    () => (snapshot ? buildPortfolioSummary(snapshot) : emptyPortfolioSummary()),
+    [snapshot]
+  );
+  const suggestions = focusTicker ? fiiSuggestions(focusTicker) : PORTFOLIO_SUGGESTIONS;
   const [open, setOpen] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -183,8 +206,9 @@ export function PortfolioAssistant({ snapshot }: { snapshot: PortfolioSnapshot }
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: nextMessages,
-          portfolio: buildPortfolioSummary(snapshot),
+          portfolio: portfolioSummary,
           model,
+          ...(focusTicker ? { focusTicker } : {}),
         }),
         signal: abort.signal,
       });
@@ -302,7 +326,7 @@ export function PortfolioAssistant({ snapshot }: { snapshot: PortfolioSnapshot }
 
       {messages.length === 0 && (
         <div className="assistant-chips">
-          {SUGGESTIONS.map((q) => (
+          {suggestions.map((q) => (
             <button
               key={q}
               type="button"
@@ -318,7 +342,11 @@ export function PortfolioAssistant({ snapshot }: { snapshot: PortfolioSnapshot }
 
       <div className="assistant-log" ref={listRef}>
         {messages.length === 0 && (
-          <p className="hint">Pergunte sobre alocação, concentração ou um FII.</p>
+          <p className="hint">
+            {focusTicker
+              ? `Pergunte sobre ${focusTicker}, indicadores ou comunicados recentes.`
+              : "Pergunte sobre alocação, concentração ou um FII."}
+          </p>
         )}
         {messages.map((m, i) => (
           <div key={`${m.role}-${i}`} className={`assistant-msg ${m.role}`}>
@@ -376,7 +404,9 @@ export function PortfolioAssistant({ snapshot }: { snapshot: PortfolioSnapshot }
           className="assistant-input"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Pergunte sobre a carteira…"
+          placeholder={
+            focusTicker ? `Pergunte sobre ${focusTicker}…` : "Pergunte sobre a carteira…"
+          }
           disabled={configured === false}
           maxLength={4000}
         />

@@ -1,4 +1,5 @@
-const UI_KEY = "carteiralivre.ui.v2";
+const SESSION_KEY = "carteiralivre.ui.session";
+const LEGACY_KEYS = ["carteiralivre.ui.v1", "carteiralivre.ui.v2"];
 
 interface UiPreferences {
   showValues: boolean;
@@ -12,8 +13,17 @@ const listeners = new Set<() => void>();
 
 function read(): UiPreferences {
   if (typeof window === "undefined") return DEFAULTS;
+
+  for (const key of LEGACY_KEYS) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // private mode — ignore
+    }
+  }
+
   try {
-    const raw = localStorage.getItem(UI_KEY);
+    const raw = sessionStorage.getItem(SESSION_KEY);
     if (!raw) return DEFAULTS;
     const parsed = JSON.parse(raw) as Partial<UiPreferences>;
     return {
@@ -36,6 +46,10 @@ export function loadShowValues(): boolean {
 
 export function saveShowValues(showValues: boolean): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(UI_KEY, JSON.stringify({ showValues }));
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify({ showValues }));
+  } catch {
+    // quota / private mode — ignore
+  }
   listeners.forEach((listener) => listener());
 }

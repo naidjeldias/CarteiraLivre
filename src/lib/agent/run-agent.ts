@@ -22,6 +22,7 @@ export interface AgentRequest {
   messages: ChatMessage[];
   portfolio: PortfolioSummary;
   model: string;
+  focusTicker?: string;
 }
 
 export type SseEvent =
@@ -103,7 +104,15 @@ export function validateAgentRequest(body: unknown): ValidateResult {
     model = rec.model;
   }
 
-  return { ok: true, value: { messages, portfolio, model } };
+  let focusTicker: string | undefined;
+  if (rec.focusTicker != null && rec.focusTicker !== "") {
+    if (typeof rec.focusTicker !== "string") {
+      return { ok: false, status: 400, error: "focusTicker inválido." };
+    }
+    focusTicker = rec.focusTicker.trim().toUpperCase();
+  }
+
+  return { ok: true, value: { messages, portfolio, model, focusTicker } };
 }
 
 function parseSummary(raw: unknown): PortfolioSummary | { error: string } {
@@ -299,7 +308,10 @@ async function streamGeminiTurn(
 async function runAgentLoop(req: AgentRequest, send: (event: SseEvent) => void) {
   const ai = createGeminiClient();
   const model = req.model;
-  const systemInstruction = `${SYSTEM_PROMPT}\n\nResumo da carteira (JSON):\n${JSON.stringify(req.portfolio)}`;
+  let systemInstruction = `${SYSTEM_PROMPT}\n\nResumo da carteira (JSON):\n${JSON.stringify(req.portfolio)}`;
+  if (req.focusTicker) {
+    systemInstruction += `\n\nContexto da UI: o usuário está na página de detalhe do FII ${req.focusTicker}. Priorize este ticker; use get_fii_detail, list_recent_disclosures e search_fii_documents quando relevante.`;
+  }
   const contents: Content[] = toGeminiContents(req.messages);
 
   const baseConfig = {
