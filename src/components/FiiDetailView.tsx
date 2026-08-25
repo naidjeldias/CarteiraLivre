@@ -15,13 +15,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import {
-  formatBRLSensitive,
-  formatPctSensitive,
-  formatSignedPctSensitive,
-  MASKED_BRL,
-} from "@/lib/format-sensitive";
-import { formatBRL } from "@/lib/allocation";
+import { formatBRL, formatPct } from "@/lib/allocation";
+import { formatSignedPct } from "@/lib/quotes";
 import { lookupFii } from "@/lib/fii-catalog";
 import type { FiiFundamentals } from "@/lib/fii-fundamentals";
 import type { PriceSignal } from "@/lib/fii-score";
@@ -29,8 +24,6 @@ import type { FiiTipo } from "@/lib/types";
 import { FiiAnalysisPanel } from "@/components/FiiAnalysisPanel";
 import { FiiDisclosuresSection } from "@/components/FiiDisclosuresSection";
 import { PortfolioAssistant } from "@/components/PortfolioAssistant";
-import { ValuesToggle } from "@/components/ValuesToggle";
-import { useShowValues } from "@/hooks/useShowValues";
 import { loadPortfolioSnapshot } from "@/lib/portfolio-storage";
 import type { PortfolioSnapshot } from "@/lib/types";
 
@@ -91,7 +84,6 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
   const [error, setError] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<PortfolioSnapshot | null>(null);
   const meta = lookupFii(ticker);
-  const { showValues, toggleShowValues } = useShowValues();
 
   useEffect(() => {
     setSnapshot(loadPortfolioSnapshot());
@@ -169,16 +161,9 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
 
   return (
     <main className="detail-page">
-      <div className="page-top-bar">
-        <Link href="/" className="back-link">
-          ← Voltar à carteira
-        </Link>
-        <ValuesToggle
-          showValues={showValues}
-          onToggle={toggleShowValues}
-          className="page-values-toggle"
-        />
-      </div>
+      <Link href="/" className="back-link">
+        ← Voltar à carteira
+      </Link>
 
       <header className="detail-header">
         <div>
@@ -202,14 +187,14 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
         {data?.quote && (
           <div className="detail-price">
             <p className="stat-label">Cotação</p>
-            <p className="stat-value">{formatBRLSensitive(data.quote.price, showValues)}</p>
+            <p className="stat-value">{formatBRL(data.quote.price)}</p>
             {data.quote.changePercent != null && (
               <p
                 className={
                   data.quote.changePercent >= 0 ? "delta up" : "delta down"
                 }
               >
-                dia {formatSignedPctSensitive(data.quote.changePercent, showValues)}
+                dia {formatSignedPct(data.quote.changePercent)}
               </p>
             )}
           </div>
@@ -251,19 +236,19 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
                   priceChange3m != null && priceChange3m >= 0 ? "up" : "down"
                 }`}
               >
-                {priceChange3m != null ? formatSignedPctSensitive(priceChange3m, showValues) : "—"}
+                {priceChange3m != null ? formatSignedPct(priceChange3m) : "—"}
               </p>
             </div>
             <div>
               <p className="stat-label">Máxima (dia)</p>
               <p className="stat-value small">
-                {data.quote?.dayHigh != null ? formatBRLSensitive(data.quote.dayHigh, showValues) : "—"}
+                {data.quote?.dayHigh != null ? formatBRL(data.quote.dayHigh) : "—"}
               </p>
             </div>
             <div>
               <p className="stat-label">Mínima (dia)</p>
               <p className="stat-value small">
-                {data.quote?.dayLow != null ? formatBRLSensitive(data.quote.dayLow, showValues) : "—"}
+                {data.quote?.dayLow != null ? formatBRL(data.quote.dayLow) : "—"}
               </p>
             </div>
           </div>
@@ -298,10 +283,7 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
                       borderRadius: 8,
                     }}
                     labelStyle={{ color: "#8b9aab" }}
-                    formatter={(value: number) => [
-                      showValues ? formatBRL(value) : MASKED_BRL,
-                      "Fechamento",
-                    ]}
+                    formatter={(value: number) => [formatBRL(value), "Fechamento"]}
                   />
                   <Line
                     type="monotone"
@@ -331,14 +313,14 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
                 <div>
                   <p className="stat-label">DY 12m</p>
                   <p className="stat-value small">
-                    {formatPctSensitive(data.dividendYieldTtm / 100, showValues)}
+                    {formatPct(data.dividendYieldTtm / 100)}
                   </p>
                 </div>
               )}
               {data.ttmPerShare != null && (
                 <div>
                   <p className="stat-label">Soma ~12m / cota</p>
-                  <p className="stat-value small">{formatBRLSensitive(data.ttmPerShare, showValues)}</p>
+                  <p className="stat-value small">{formatBRL(data.ttmPerShare)}</p>
                 </div>
               )}
               {data.dividendsSource && (
@@ -354,10 +336,10 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
           {data.dividendsNote && <p className="hint">{data.dividendsNote}</p>}
           {data.dividends.length > 0 && !data.ttmPerShare && (
             <p className="hint" style={{ marginBottom: "0.75rem" }}>
-              Soma no período listado: <strong>{formatBRLSensitive(dividendSum, showValues)}</strong> por
+              Soma no período listado: <strong>{formatBRL(dividendSum)}</strong> por
               cota
               {data.quote?.price
-                ? ` (~${formatPctSensitive(showValues ? dividendSum / data.quote.price : 0, showValues)} sobre o preço atual)`
+                ? ` (~${formatPct(dividendSum / data.quote.price)} sobre o preço atual)`
                 : ""}
             </p>
           )}
@@ -368,7 +350,7 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
               <h3 className="chart-subtitle">Evolução mensal (R$/cota)</h3>
               {dividendAvg != null && (
                 <p className="hint" style={{ marginBottom: "0.5rem" }}>
-                  Média no gráfico: <strong>{formatBRLSensitive(dividendAvg, showValues)}</strong> / mês
+                  Média no gráfico: <strong>{formatBRL(dividendAvg)}</strong> / mês
                   {dividendChartData.length < (data.dividends.length || 0)
                     ? " · exibindo até 18 meses"
                     : ""}
@@ -401,10 +383,7 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
                         borderRadius: 8,
                       }}
                       labelStyle={{ color: "#8b9aab" }}
-                      formatter={(value: number) => [
-                        showValues ? formatBRL(value) : MASKED_BRL,
-                        "Provento",
-                      ]}
+                      formatter={(value: number) => [formatBRL(value), "Provento"]}
                       labelFormatter={(_, payload) => {
                         const month = payload?.[0]?.payload?.month as string | undefined;
                         if (!month) return "";
@@ -460,7 +439,7 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
                         <td>{formatDateBR(d.paymentDate)}</td>
                         <td>{d.label}</td>
                         <td>{d.relatedTo || "—"}</td>
-                        <td className="num">{formatBRLSensitive(d.rate, showValues)}</td>
+                        <td className="num">{formatBRL(d.rate)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -477,7 +456,6 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
           fundamentals={data.fundamentals ?? null}
           priceSignal={data.priceSignal}
           bolsaiConfigured={Boolean(data.providers?.bolsaiConfigured)}
-          showValues={showValues}
         />
       )}
 

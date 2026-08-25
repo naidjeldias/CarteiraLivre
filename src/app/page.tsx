@@ -6,6 +6,7 @@ import {
   allocationByFiiSegmento,
   allocationByFiiTipo,
   filterFiis,
+  formatBRL,
   totalValue,
 } from "@/lib/allocation";
 import { lookupFii } from "@/lib/fii-catalog";
@@ -31,6 +32,7 @@ import { ValuesToggle } from "@/components/ValuesToggle";
 import { useShowValues } from "@/hooks/useShowValues";
 import {
   formatBRLSensitive,
+  formatNumberSensitive,
   formatPctSensitive,
   formatSignedPctSensitive,
 } from "@/lib/format-sensitive";
@@ -326,10 +328,10 @@ export default function HomePage() {
                           <span className={`badge${unknown ? " warn" : ""}`}>{meta.tipo}</span>
                         </td>
                         <td>{meta.segmento}</td>
-                        <td className="num">{p.quantity.toLocaleString("pt-BR")}</td>
+                        <td className="num">{formatNumberSensitive(p.quantity, showValues)}</td>
                         <td className="num">{formatBRLSensitive(p.price, showValues)}</td>
                         <td className="num">
-                          {mktPrice != null ? formatBRLSensitive(mktPrice, showValues) : q?.error ? "—" : "—"}
+                          {mktPrice != null ? formatBRL(mktPrice) : q?.error ? "—" : "—"}
                         </td>
                         <td className={`num ${deltaClass(vs)}`}>
                           {vs != null ? formatSignedPctSensitive(vs, showValues) : "—"}
@@ -369,10 +371,10 @@ export default function HomePage() {
                       <tr key={`${p.ticker}-${p.broker ?? ""}-${p.assetClass}`}>
                         <td>{p.ticker}</td>
                         <td>{p.assetClass}</td>
-                        <td className="num">{p.quantity.toLocaleString("pt-BR")}</td>
+                        <td className="num">{formatNumberSensitive(p.quantity, showValues)}</td>
                         <td className="num">{formatBRLSensitive(p.price, showValues)}</td>
                         <td className="num">
-                          {mktPrice != null ? formatBRLSensitive(mktPrice, showValues) : "—"}
+                          {mktPrice != null ? formatBRL(mktPrice) : "—"}
                         </td>
                         <td className="num">{formatBRLSensitive(val, showValues)}</td>
                         <td className="num">{formatPctSensitive(base ? val / base : 0, showValues)}</td>

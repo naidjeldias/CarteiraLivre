@@ -1,12 +1,11 @@
 "use client";
 
-import { formatBRLSensitive, MASKED_PCT } from "@/lib/format-sensitive";
+import { formatBRL } from "@/lib/allocation";
 import type { FiiFundamentals } from "@/lib/fii-fundamentals";
 import type { PriceSignal } from "@/lib/fii-score";
 import type { FiiTipo } from "@/lib/types";
 
-function fmtPct(n: number | null | undefined, visible: boolean, digits = 1): string {
-  if (!visible) return MASKED_PCT;
+function fmtPct(n: number | null | undefined, digits = 1): string {
   if (n == null || !Number.isFinite(n)) return "—";
   return `${n.toLocaleString("pt-BR", {
     minimumFractionDigits: digits,
@@ -41,20 +40,14 @@ export function FiiAnalysisPanel({
   fundamentals,
   priceSignal,
   bolsaiConfigured,
-  showValues = false,
 }: {
   tipo: FiiTipo;
   fundamentals: FiiFundamentals | null;
   priceSignal: PriceSignal;
   bolsaiConfigured: boolean;
-  showValues?: boolean;
 }) {
   const f = fundamentals;
-  const pct = (n: number | null | undefined, digits = 1) => fmtPct(n, showValues, digits);
-  const num = (n: number | null | undefined) =>
-    !showValues ? "******" : fmtNum(n);
-  const ratio = (n: number | null | undefined) =>
-    !showValues ? "****" : n != null && Number.isFinite(n) ? n.toFixed(2) : "—";
+  const pct = (n: number | null | undefined, digits = 1) => fmtPct(n, digits);
 
   return (
     <div className="analysis-stack">
@@ -69,7 +62,10 @@ export function FiiAnalysisPanel({
         )}
 
         <div className="metrics-grid">
-          <Metric label="P/VP" value={ratio(f?.pvp)} />
+          <Metric
+            label="P/VP"
+            value={f?.pvp != null && Number.isFinite(f.pvp) ? f.pvp.toFixed(2) : "—"}
+          />
           <Metric
             label="DY 12m"
             value={pct(f?.dividendYieldTtm)}
@@ -77,13 +73,9 @@ export function FiiAnalysisPanel({
           />
           <Metric
             label="VP / cota"
-            value={
-              f?.bookValuePerShare != null
-                ? formatBRLSensitive(f.bookValuePerShare, showValues)
-                : "—"
-            }
+            value={f?.bookValuePerShare != null ? formatBRL(f.bookValuePerShare) : "—"}
           />
-          <Metric label="Cotistas" value={num(f?.totalShareholders)} />
+          <Metric label="Cotistas" value={fmtNum(f?.totalShareholders)} />
         </div>
 
         {(tipo === "tijolo" || tipo === "desenvolvimento" || f?.vacancyPct != null) && (
@@ -92,15 +84,13 @@ export function FiiAnalysisPanel({
             <div className="metrics-grid">
               <Metric label="Vacância" value={pct(f?.vacancyPct)} />
               <Metric label="Área locada" value={pct(f?.leasedPct)} />
-              <Metric label="Imóveis" value={num(f?.propertyCount)} />
+              <Metric label="Imóveis" value={fmtNum(f?.propertyCount)} />
               <Metric
                 label="ABL total"
                 value={
-                  !showValues
-                    ? "******"
-                    : f?.totalAreaSqm != null
-                      ? `${Math.round(f.totalAreaSqm).toLocaleString("pt-BR")} m²`
-                      : "—"
+                  f?.totalAreaSqm != null
+                    ? `${Math.round(f.totalAreaSqm).toLocaleString("pt-BR")} m²`
+                    : "—"
                 }
               />
             </div>
@@ -170,8 +160,8 @@ export function FiiAnalysisPanel({
           <div className={signalClass(priceSignal.label)}>
             <p className="stat-label">Score</p>
             <p className="score-number">
-              {!showValues ? "—" : priceSignal.total != null ? priceSignal.total : "—"}
-              {showValues && priceSignal.total != null && <span className="score-max">/100</span>}
+              {priceSignal.total != null ? priceSignal.total : "—"}
+              {priceSignal.total != null && <span className="score-max">/100</span>}
             </p>
             <p className="score-label-text">{priceSignal.label}</p>
           </div>
@@ -187,7 +177,7 @@ export function FiiAnalysisPanel({
                   <span className="hint"> · peso {item.weight}</span>
                 </span>
                 <span className="num">
-                  {!showValues ? "—" : item.score != null ? `${Math.round(item.score)}` : "n/d"}
+                  {item.score != null ? `${Math.round(item.score)}` : "n/d"}
                 </span>
               </div>
               <div className="bar-track">
