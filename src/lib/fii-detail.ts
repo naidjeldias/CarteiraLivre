@@ -1,4 +1,5 @@
 import { brapiHeaders, getBrapiToken } from "@/lib/brapi-server";
+import { brapiRangeFor, DEFAULT_CHART_RANGE, type ChartRangeId } from "@/lib/chart-ranges";
 import { fetchFiiDividends } from "@/lib/dividends-providers";
 import { fetchBolsaiFundamentals, fundTypeFromBolsai } from "@/lib/fii-fundamentals";
 import { lookupFii } from "@/lib/fii-catalog";
@@ -92,11 +93,17 @@ async function fetchQuote(ticker: string, token: string): Promise<FiiQuoteInfo |
   };
 }
 
-async function fetchHistory(ticker: string, token: string): Promise<PricePoint[]> {
+async function fetchHistory(
+  ticker: string,
+  token: string,
+  range: ChartRangeId = DEFAULT_CHART_RANGE
+): Promise<PricePoint[]> {
+  const brapiRange = brapiRangeFor(range);
   const url = new URL("https://brapi.dev/api/v2/stocks/historical");
   url.searchParams.set("symbols", ticker);
-  url.searchParams.set("range", "3mo");
+  url.searchParams.set("range", brapiRange);
   url.searchParams.set("interval", "1d");
+  url.searchParams.set("sortOrder", "asc");
 
   const res = await fetch(url.toString(), {
     headers: brapiHeaders(token),
@@ -122,7 +129,7 @@ async function fetchHistory(ticker: string, token: string): Promise<PricePoint[]
 
   const legacyUrl = `https://brapi.dev/api/quote/${encodeURIComponent(
     ticker
-  )}?range=3mo&interval=1d&token=${encodeURIComponent(token)}`;
+  )}?range=${encodeURIComponent(brapiRange)}&interval=1d&token=${encodeURIComponent(token)}`;
   const legacy = await fetch(legacyUrl, { cache: "no-store" });
   if (!legacy.ok) return [];
   const lj = await legacy.json();
@@ -151,17 +158,27 @@ function monthlyDividendSeries(dividends: Array<{ paymentDate: string; rate: num
     .map(([, v]) => v);
 }
 
+export async function fetchFiiHistory(
+  ticker: string,
+  range: ChartRangeId = DEFAULT_CHART_RANGE
+): Promise<PricePoint[]> {
+  const token = getBrapiToken();
+  if (!token) return [];
+  return fetchHistory(ticker, token, range);
+}
+
 export async function buildFiiDetail(
   ticker: string,
-  options?: { includeHistory?: boolean }
+  options?: { includeHistory?: boolean; range?: ChartRangeId }
 ): Promise<FiiDetailPayload> {
   const includeHistory = options?.includeHistory !== false;
+  const range = options?.range ?? DEFAULT_CHART_RANGE;
   const token = getBrapiToken();
   const catalog = lookupFii(ticker);
 
   const [quote, history, divResult, fundamentals] = await Promise.all([
     token ? fetchQuote(ticker, token) : Promise.resolve(null),
-    token && includeHistory ? fetchHistory(ticker, token) : Promise.resolve([] as PricePoint[]),
+    token && includeHistory ? fetchHistory(ticker, token, range) : Promise.resolve([] as PricePoint[]),
     fetchFiiDividends(ticker, token),
     fetchBolsaiFundamentals(ticker),
   ]);

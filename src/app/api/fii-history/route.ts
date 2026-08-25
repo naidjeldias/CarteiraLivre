@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isValidB3Ticker } from "@/lib/brapi-server";
-import { CHART_RANGES, DEFAULT_CHART_RANGE, type ChartRangeId } from "@/lib/chart-ranges";
-import { buildFiiDetail } from "@/lib/fii-detail";
-
-export type { PricePoint } from "@/lib/fii-detail";
+import { CHART_RANGES, type ChartRangeId } from "@/lib/chart-ranges";
+import { fetchFiiHistory } from "@/lib/fii-detail";
 
 function parseRange(raw: string | null): ChartRangeId {
   const id = (raw || "").trim() as ChartRangeId;
   if (CHART_RANGES.some((r) => r.id === id)) return id;
-  return DEFAULT_CHART_RANGE;
+  return "5d";
 }
 
 export async function GET(req: NextRequest) {
@@ -18,6 +16,6 @@ export async function GET(req: NextRequest) {
   }
 
   const range = parseRange(req.nextUrl.searchParams.get("range"));
-  const payload = await buildFiiDetail(ticker, { includeHistory: true, range });
-  return NextResponse.json(payload);
+  const history = await fetchFiiHistory(ticker, range);
+  return NextResponse.json({ ticker, range, history, fetchedAt: new Date().toISOString() });
 }

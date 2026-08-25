@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Bar,
@@ -15,12 +15,20 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import {
+  chartRangeLabel,
+  chartRangeStartDate,
+  DEFAULT_CHART_RANGE,
+  isOnOrAfter,
+  type ChartRangeId,
+} from "@/lib/chart-ranges";
 import { formatBRL, formatPct } from "@/lib/allocation";
 import { formatSignedPct } from "@/lib/quotes";
 import { lookupFii } from "@/lib/fii-catalog";
 import type { FiiFundamentals } from "@/lib/fii-fundamentals";
 import type { PriceSignal } from "@/lib/fii-score";
 import type { FiiTipo } from "@/lib/types";
+import { ChartRangeSelect } from "@/components/ChartRangeSelect";
 import { FiiAnalysisPanel } from "@/components/FiiAnalysisPanel";
 import { FiiDisclosuresSection } from "@/components/FiiDisclosuresSection";
 import { PortfolioAssistant } from "@/components/PortfolioAssistant";
@@ -83,7 +91,11 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<PortfolioSnapshot | null>(null);
+  const [chartRange, setChartRange] = useState<ChartRangeId>(DEFAULT_CHART_RANGE);
+  const [history, setHistory] = useState<PricePoint[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const meta = lookupFii(ticker);
+  const skipHistoryFetch = useRef(true);
 
   useEffect(() => {
     setSnapshot(loadPortfolioSnapshot());
@@ -91,13 +103,20 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    skipHistoryFetch.current = true;
+    setChartRange(DEFAULT_CHART_RANGE);
     setLoading(true);
     setError(null);
-    fetch(`/api/fii-detail?ticker=${encodeURIComponent(ticker)}`)
+    fetch(
+      `/api/fii-detail?ticker=${encodeURIComponent(ticker)}&range=${DEFAULT_CHART_RANGE}`
+    )
       .then(async (res) => {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
-        if (!cancelled) setData(json);
+        if (!cancelled) {
+          setData(json);
+          setHistory(json.history || []);
+        }
       })
       .catch((e) => {
         if (!cancelled) setError(e instanceof Error ? e.message : "Falha ao carregar");
@@ -110,29 +129,62 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
     };
   }, [ticker]);
 
+  useEffect(() => {
+    if (skipHistoryFetch.current) {
+      skipHistoryFetch.current = false;
+      return;
+    }
+    let cancelled = false;
+    setHistoryLoading(true);
+    fetch(
+      `/api/fii-history?ticker=${encodeURIComponent(ticker)}&range=${encodeURIComponent(chartRange)}`
+    )
+      .then(async (res) => {
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+        if (!cancelled) setHistory(json.history || []);
+      })
+      .catch(() => {
+        if (!cancelled) setHistory([]);
+      })
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [ticker, chartRange]);
+
+  const rangeStart = useMemo(() => chartRangeStartDate(chartRange), [chartRange]);
+
+  const filteredDividends = useMemo(
+    () =>
+      (data?.dividends || []).filter((d) => isOnOrAfter(d.paymentDate, rangeStart)),
+    [data, rangeStart]
+  );
+
   const chartData = useMemo(
     () =>
-      (data?.history || []).map((p) => ({
+      history.map((p) => ({
         ...p,
         label: formatDateBR(p.date),
       })),
-    [data]
+    [history]
   );
 
   const dividendSum = useMemo(
-    () => (data?.dividends || []).reduce((s, d) => s + d.rate, 0),
-    [data]
+    () => filteredDividends.reduce((s, d) => s + d.rate, 0),
+    [filteredDividends]
   );
 
-  /** Agrega por mês (asc) para o gráfico de evolução. */
   const dividendChartData = useMemo(() => {
     const map = new Map<string, number>();
-    for (const d of data?.dividends || []) {
-      const key = d.paymentDate.slice(0, 7); // YYYY-MM
+    for (const d of filteredDividends) {
+      const key = d.paymentDate.slice(0, 7);
       if (!/^\d{4}-\d{2}$/.test(key)) continue;
       map.set(key, (map.get(key) ?? 0) + d.rate);
     }
-    const rows = [...map.entries()]
+    return [...map.entries()]
       .sort((a, b) => a[0].localeCompare(b[0]))
       .map(([month, value]) => {
         const [y, m] = month.split("-");
@@ -142,16 +194,14 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
           value,
         };
       });
-    // últimos 18 meses no gráfico (tabela continua completa)
-    return rows.slice(-18);
-  }, [data]);
+  }, [filteredDividends]);
 
   const dividendAvg = useMemo(() => {
     if (!dividendChartData.length) return null;
     return dividendChartData.reduce((s, r) => s + r.value, 0) / dividendChartData.length;
   }, [dividendChartData]);
 
-  const priceChange3m = useMemo(() => {
+  const priceChangePeriod = useMemo(() => {
     if (!chartData.length) return null;
     const first = chartData[0].close;
     const last = chartData[chartData.length - 1].close;
@@ -227,16 +277,23 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
 
       {!loading && !error && data && tab === "cotacao" && (
         <section className="panel detail-panel">
-          <h2>Preço — últimos ~3 meses</h2>
+          <div className="chart-panel-head">
+            <h2>Preço — {chartRangeLabel(chartRange)}</h2>
+            <ChartRangeSelect
+              value={chartRange}
+              onChange={setChartRange}
+              disabled={historyLoading}
+            />
+          </div>
           <div className="grid stats detail-stats">
             <div>
               <p className="stat-label">Variação no período</p>
               <p
                 className={`stat-value small ${
-                  priceChange3m != null && priceChange3m >= 0 ? "up" : "down"
+                  priceChangePeriod != null && priceChangePeriod >= 0 ? "up" : "down"
                 }`}
               >
-                {priceChange3m != null ? formatSignedPct(priceChange3m) : "—"}
+                {priceChangePeriod != null ? formatSignedPct(priceChangePeriod) : "—"}
               </p>
             </div>
             <div>
@@ -253,7 +310,9 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
             </div>
           </div>
 
-          {chartData.length === 0 ? (
+          {historyLoading && chartData.length === 0 ? (
+            <p className="hint">Carregando histórico…</p>
+          ) : chartData.length === 0 ? (
             <p className="hint">Sem histórico de preço disponível.</p>
           ) : (
             <div className="chart-box">
@@ -306,7 +365,10 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
 
       {!loading && !error && data && tab === "dividendos" && (
         <section className="panel detail-panel">
-          <h2>Proventos recentes</h2>
+          <div className="chart-panel-head">
+            <h2>Proventos — {chartRangeLabel(chartRange)}</h2>
+            <ChartRangeSelect value={chartRange} onChange={setChartRange} />
+          </div>
           {(data.dividendYieldTtm != null || data.ttmPerShare != null) && (
             <div className="grid stats detail-stats">
               {data.dividendYieldTtm != null && (
@@ -336,8 +398,7 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
           {data.dividendsNote && <p className="hint">{data.dividendsNote}</p>}
           {data.dividends.length > 0 && !data.ttmPerShare && (
             <p className="hint" style={{ marginBottom: "0.75rem" }}>
-              Soma no período listado: <strong>{formatBRL(dividendSum)}</strong> por
-              cota
+              Soma no período: <strong>{formatBRL(dividendSum)}</strong> por cota
               {data.quote?.price
                 ? ` (~${formatPct(dividendSum / data.quote.price)} sobre o preço atual)`
                 : ""}
@@ -345,15 +406,14 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
           )}
           {data.dividends.length === 0 ? (
             <p className="hint">Nenhum dividendo para exibir.</p>
+          ) : filteredDividends.length === 0 ? (
+            <p className="hint">Nenhum provento neste período.</p>
           ) : (
             <>
               <h3 className="chart-subtitle">Evolução mensal (R$/cota)</h3>
               {dividendAvg != null && (
                 <p className="hint" style={{ marginBottom: "0.5rem" }}>
                   Média no gráfico: <strong>{formatBRL(dividendAvg)}</strong> / mês
-                  {dividendChartData.length < (data.dividends.length || 0)
-                    ? " · exibindo até 18 meses"
-                    : ""}
                 </p>
               )}
               <div className="chart-box">
@@ -434,7 +494,7 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.dividends.map((d, i) => (
+                    {filteredDividends.map((d, i) => (
                       <tr key={`${d.paymentDate}-${d.rate}-${i}`}>
                         <td>{formatDateBR(d.paymentDate)}</td>
                         <td>{d.label}</td>
