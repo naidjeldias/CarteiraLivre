@@ -118,7 +118,7 @@ export default function HomePage() {
       setQuotesAt(fetchedAt);
       const failed = Object.values(map).filter((q) => q.error).length;
       if (failed > 0) {
-        setQuotesError(`${failed} ticker(s) sem cotação (ex.: recibos *12 ou token/limites).`);
+        setQuotesError(`${failed} ticker(s) sem cotação (token, limites ou ticker inválido).`);
       }
     } catch (e) {
       setQuotesError(e instanceof Error ? e.message : "Falha ao atualizar cotações.");

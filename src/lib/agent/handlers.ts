@@ -183,7 +183,7 @@ function handleRecentDisclosures(args: Record<string, unknown>, summary: Portfol
   }
   const unique = [...new Set(requested.filter((t) => isValidB3Ticker(t)))];
   const fromPortfolio = summary.positions
-    .filter((p) => p.assetClass === "fii" && isValidB3Ticker(p.ticker))
+    .filter((p) => p.assetClass === "fii" && p.ticker.endsWith("11") && isValidB3Ticker(p.ticker))
     .map((p) => p.ticker.toUpperCase());
   const tickers = (unique.length ? unique : [...new Set(fromPortfolio)]).slice(0, 20);
   if (tickers.length === 0) {
