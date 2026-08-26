@@ -42,8 +42,8 @@ export function ValuesToggle({
       className={`values-toggle${className ? ` ${className}` : ""}`}
       onClick={onToggle}
       aria-pressed={showValues}
-      aria-label={showValues ? "Ocultar dados da carteira" : "Exibir dados da carteira"}
-      title={showValues ? "Ocultar dados da carteira" : "Exibir dados da carteira"}
+      aria-label={showValues ? "Ocultar valores em R$ da carteira" : "Exibir valores em R$ da carteira"}
+      title={showValues ? "Ocultar valores em R$" : "Exibir valores em R$"}
     >
       <span className="values-toggle-icon">{showValues ? <EyeOpenIcon /> : <EyeOffIcon />}</span>
       <span className="values-toggle-label">{label}</span>

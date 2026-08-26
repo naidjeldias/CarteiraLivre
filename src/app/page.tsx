@@ -7,6 +7,7 @@ import {
   allocationByFiiTipo,
   filterFiis,
   formatBRL,
+  formatPct,
   totalValue,
 } from "@/lib/allocation";
 import { lookupFii } from "@/lib/fii-catalog";
@@ -19,6 +20,7 @@ import {
 import {
   fetchMarketQuotes,
   fetchQuotesStatus,
+  formatSignedPct,
   loadQuotesCache,
   marketValue,
   quoteableTickers,
@@ -30,12 +32,7 @@ import type { PortfolioSnapshot } from "@/lib/types";
 import { PortfolioAssistant } from "@/components/PortfolioAssistant";
 import { ValuesToggle } from "@/components/ValuesToggle";
 import { useShowValues } from "@/hooks/useShowValues";
-import {
-  formatBRLSensitive,
-  formatNumberSensitive,
-  formatPctSensitive,
-  formatSignedPctSensitive,
-} from "@/lib/format-sensitive";
+import { formatBRLSensitive } from "@/lib/format-sensitive";
 
 function openFiiDetail(ticker: string) {
   // Mesma aba: histórico do browser + snapshot no localStorage
@@ -45,11 +42,9 @@ function openFiiDetail(ticker: string) {
 function AllocationBars({
   title,
   slices,
-  showValues,
 }: {
   title: string;
   slices: { key: string; value: number; weight: number }[];
-  showValues: boolean;
 }) {
   return (
     <section className="panel">
@@ -64,7 +59,7 @@ function AllocationBars({
               <div className="bar-track">
                 <div className="bar-fill" style={{ width: `${Math.max(s.weight * 100, 1)}%` }} />
               </div>
-              <span className="bar-pct">{formatPctSensitive(s.weight, showValues)}</span>
+              <span className="bar-pct">{formatPct(s.weight)}</span>
             </div>
           ))}
         </div>
@@ -245,7 +240,7 @@ export default function HomePage() {
               </p>
               {hasQuotes && mtmDeltaPct != null && (
                 <p className={deltaClass(mtmDeltaPct)}>
-                  vs extrato {formatSignedPctSensitive(mtmDeltaPct, showValues)}
+                  vs extrato {formatSignedPct(mtmDeltaPct)}
                 </p>
               )}
             </section>
@@ -258,20 +253,14 @@ export default function HomePage() {
           </div>
 
           <div className="grid charts">
-            <AllocationBars
-              title="Alocação por classe"
-              slices={allocationByAssetClass(snapshot)}
-              showValues={showValues}
-            />
+            <AllocationBars title="Alocação por classe" slices={allocationByAssetClass(snapshot)} />
             <AllocationBars
               title="FIIs por tipo (papel / tijolo…)"
               slices={allocationByFiiTipo(snapshot)}
-              showValues={showValues}
             />
             <AllocationBars
               title="FIIs por segmento"
               slices={allocationByFiiSegmento(snapshot)}
-              showValues={showValues}
             />
           </div>
 
@@ -328,16 +317,16 @@ export default function HomePage() {
                           <span className={`badge${unknown ? " warn" : ""}`}>{meta.tipo}</span>
                         </td>
                         <td>{meta.segmento}</td>
-                        <td className="num">{formatNumberSensitive(p.quantity, showValues)}</td>
+                        <td className="num">{p.quantity.toLocaleString("pt-BR")}</td>
                         <td className="num">{formatBRLSensitive(p.price, showValues)}</td>
                         <td className="num">
                           {mktPrice != null ? formatBRL(mktPrice) : q?.error ? "—" : "—"}
                         </td>
                         <td className={`num ${deltaClass(vs)}`}>
-                          {vs != null ? formatSignedPctSensitive(vs, showValues) : "—"}
+                          {vs != null ? formatSignedPct(vs) : "—"}
                         </td>
                         <td className="num">{formatBRLSensitive(val, showValues)}</td>
-                        <td className="num">{formatPctSensitive(fiiBase ? val / fiiBase : 0, showValues)}</td>
+                        <td className="num">{formatPct(fiiBase ? val / fiiBase : 0)}</td>
                       </tr>
                     );
                   })}
@@ -371,13 +360,13 @@ export default function HomePage() {
                       <tr key={`${p.ticker}-${p.broker ?? ""}-${p.assetClass}`}>
                         <td>{p.ticker}</td>
                         <td>{p.assetClass}</td>
-                        <td className="num">{formatNumberSensitive(p.quantity, showValues)}</td>
+                        <td className="num">{p.quantity.toLocaleString("pt-BR")}</td>
                         <td className="num">{formatBRLSensitive(p.price, showValues)}</td>
                         <td className="num">
                           {mktPrice != null ? formatBRL(mktPrice) : "—"}
                         </td>
                         <td className="num">{formatBRLSensitive(val, showValues)}</td>
-                        <td className="num">{formatPctSensitive(base ? val / base : 0, showValues)}</td>
+                        <td className="num">{formatPct(base ? val / base : 0)}</td>
                       </tr>
                     );
                   })}
