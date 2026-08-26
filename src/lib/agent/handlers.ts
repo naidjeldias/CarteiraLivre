@@ -198,6 +198,7 @@ function handleRecentDisclosures(args: Record<string, unknown>, summary: Portfol
     url: string;
   }> = [];
   const unsynced: string[] = [];
+  const emptyCache: Array<{ ticker: string; syncedAt: string; count: 0 }> = [];
 
   for (const ticker of tickers) {
     const index = readTickerIndex(ticker);
@@ -207,13 +208,7 @@ function handleRecentDisclosures(args: Record<string, unknown>, summary: Portfol
     }
     const items = listDisclosures(ticker).filter((d) => d.publishedAt >= cutoff);
     if (items.length === 0) {
-      disclosures.push({
-        ticker,
-        type: "outro",
-        title: "Cache local sem comunicados neste período",
-        publishedAt: index.syncedAt.slice(0, 10),
-        url: "",
-      });
+      emptyCache.push({ ticker, syncedAt: index.syncedAt, count: 0 });
       continue;
     }
     for (const item of items.slice(0, 12)) {
@@ -234,6 +229,7 @@ function handleRecentDisclosures(args: Record<string, unknown>, summary: Portfol
     count: disclosures.length,
     disclosures: disclosures.slice(0, 40),
     unsynced,
+    emptyCache: emptyCache.length ? emptyCache : undefined,
     note:
       unsynced.length > 0
         ? "Alguns FIIs ainda não têm cache local. Peça para abrir a página do FII no app para sincronizar."

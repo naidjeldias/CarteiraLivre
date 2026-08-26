@@ -68,6 +68,7 @@ Com `GEMINI_API_KEY` (chave em [Google AI Studio](https://aistudio.google.com/ap
 - O arquivo `.xlsx` **não** é enviado ao modelo — só o JSON resumido montado no browser.
 - Tom educacional; não é recomendação de investimento.
 - Chave só no servidor, injetada no container via `.env.local`. Recrie após colar: `docker compose up -d --force-recreate`.
+- Rotas Gemini (`/api/agent/chat`, `/api/fii-ai/summary`) têm **rate limit** por IP (20 e 10 req/min). Se expuser o app na LAN/VPS, prefira publicar só em localhost (`127.0.0.1:3000:3000` no `docker-compose.yml`) para não vazar a cota da API.
 
 ### Comunicados e Resumo IA (página do FII)
 

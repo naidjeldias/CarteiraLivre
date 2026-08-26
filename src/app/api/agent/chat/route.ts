@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDefaultGeminiModel, isGeminiConfigured } from "@/lib/agent/gemini";
 import { GEMINI_MODELS } from "@/lib/agent/models";
 import { agentSseHeaders, runAgentSse, validateAgentRequest } from "@/lib/agent/run-agent";
+import { checkRateLimit, clientIp, rateLimitResponse } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -17,6 +18,14 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const limited = checkRateLimit(`agent-chat:${clientIp(req)}`, {
+    windowMs: 60_000,
+    max: 20,
+  });
+  if (!limited.ok) {
+    return rateLimitResponse(limited.retryAfterSec);
+  }
+
   if (!isGeminiConfigured()) {
     return NextResponse.json(
       {

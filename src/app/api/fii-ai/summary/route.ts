@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isValidB3Ticker } from "@/lib/brapi-server";
 import { isGeminiConfigured } from "@/lib/agent/gemini";
 import { buildFiiCurrentSummary, geminiErrorMessage } from "@/lib/disclosures/summary";
+import { checkRateLimit, clientIp, rateLimitResponse } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -15,6 +16,14 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const limited = checkRateLimit(`fii-ai-summary:${clientIp(req)}`, {
+    windowMs: 60_000,
+    max: 10,
+  });
+  if (!limited.ok) {
+    return rateLimitResponse(limited.retryAfterSec);
+  }
+
   if (!isGeminiConfigured()) {
     return NextResponse.json(
       {
