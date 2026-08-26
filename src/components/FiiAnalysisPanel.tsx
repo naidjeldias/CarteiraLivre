@@ -47,6 +47,7 @@ export function FiiAnalysisPanel({
   bolsaiConfigured: boolean;
 }) {
   const f = fundamentals;
+  const pct = (n: number | null | undefined, digits = 1) => fmtPct(n, digits);
 
   return (
     <div className="analysis-stack">
@@ -61,10 +62,13 @@ export function FiiAnalysisPanel({
         )}
 
         <div className="metrics-grid">
-          <Metric label="P/VP" value={f?.pvp != null ? f.pvp.toFixed(2) : "—"} />
+          <Metric
+            label="P/VP"
+            value={f?.pvp != null && Number.isFinite(f.pvp) ? f.pvp.toFixed(2) : "—"}
+          />
           <Metric
             label="DY 12m"
-            value={fmtPct(f?.dividendYieldTtm)}
+            value={pct(f?.dividendYieldTtm)}
             hint={f?.dividendYieldTtm == null ? "pode vir dos proventos" : undefined}
           />
           <Metric
@@ -78,8 +82,8 @@ export function FiiAnalysisPanel({
           <>
             <h3 className="chart-subtitle">Tijolo / imóveis</h3>
             <div className="metrics-grid">
-              <Metric label="Vacância" value={fmtPct(f?.vacancyPct)} />
-              <Metric label="Área locada" value={fmtPct(f?.leasedPct)} />
+              <Metric label="Vacância" value={pct(f?.vacancyPct)} />
+              <Metric label="Área locada" value={pct(f?.leasedPct)} />
               <Metric label="Imóveis" value={fmtNum(f?.propertyCount)} />
               <Metric
                 label="ABL total"
@@ -106,8 +110,8 @@ export function FiiAnalysisPanel({
                       <tr key={p.name + (p.address || "")}>
                         <td>{p.name}</td>
                         <td>{p.address || "—"}</td>
-                        <td className="num">{fmtPct(p.revenuePct)}</td>
-                        <td className="num">{fmtPct(p.vacancyPct)}</td>
+                        <td className="num">{pct(p.revenuePct)}</td>
+                        <td className="num">{pct(p.vacancyPct)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -121,9 +125,9 @@ export function FiiAnalysisPanel({
           <>
             <h3 className="chart-subtitle">Papel / crédito</h3>
             <div className="metrics-grid">
-              <Metric label="Inadimplência" value={fmtPct(f?.delinquencyPct)} />
-              <Metric label="% CRI" value={fmtPct(f?.assetComposition?.criPct)} />
-              <Metric label="% caixa" value={fmtPct(f?.assetComposition?.cashPct)} />
+              <Metric label="Inadimplência" value={pct(f?.delinquencyPct)} />
+              <Metric label="% CRI" value={pct(f?.assetComposition?.criPct)} />
+              <Metric label="% caixa" value={pct(f?.assetComposition?.cashPct)} />
               <Metric label="Mandato" value={f?.mandate || "—"} />
             </div>
           </>
@@ -133,10 +137,10 @@ export function FiiAnalysisPanel({
           <>
             <h3 className="chart-subtitle">FoF / híbrido</h3>
             <div className="metrics-grid">
-              <Metric label="% em FIIs" value={fmtPct(f?.assetComposition?.fiiHoldingsPct)} />
-              <Metric label="% imóveis" value={fmtPct(f?.assetComposition?.realEstateLeasedPct)} />
-              <Metric label="% CRI" value={fmtPct(f?.assetComposition?.criPct)} />
-              <Metric label="% ações" value={fmtPct(f?.assetComposition?.stocksPct)} />
+              <Metric label="% em FIIs" value={pct(f?.assetComposition?.fiiHoldingsPct)} />
+              <Metric label="% imóveis" value={pct(f?.assetComposition?.realEstateLeasedPct)} />
+              <Metric label="% CRI" value={pct(f?.assetComposition?.criPct)} />
+              <Metric label="% ações" value={pct(f?.assetComposition?.stocksPct)} />
             </div>
           </>
         )}

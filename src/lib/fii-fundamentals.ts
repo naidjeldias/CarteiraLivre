@@ -56,6 +56,32 @@ export function fundTypeFromBolsai(raw?: string): FiiTipo | undefined {
   return mapFundType(raw);
 }
 
+export function pickBolsaiCnpj(raw: Record<string, unknown> | null | undefined): string | undefined {
+  if (!raw) return undefined;
+  const keys = ["cnpj", "cnpj_fundo", "cnpjFundo", "fund_cnpj", "document", "cnpj_fundo_classe"];
+  for (const key of keys) {
+    const val = raw[key];
+    if (typeof val === "string" && val.replace(/\D/g, "").length === 14) return val;
+  }
+  return undefined;
+}
+
+export async function fetchBolsaiCnpj(ticker: string): Promise<string | undefined> {
+  const key = process.env.BOLSAI_API_KEY?.trim();
+  if (!key) return undefined;
+  try {
+    const res = await fetch(`https://api.usebolsai.com/api/v1/fiis/${encodeURIComponent(ticker)}`, {
+      headers: { "X-API-Key": key },
+      cache: "no-store",
+    });
+    if (!res.ok) return undefined;
+    const j = (await res.json()) as Record<string, unknown>;
+    return pickBolsaiCnpj(j);
+  } catch {
+    return undefined;
+  }
+}
+
 export async function fetchBolsaiFundamentals(
   ticker: string
 ): Promise<FiiFundamentals | null> {

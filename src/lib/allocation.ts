@@ -7,7 +7,9 @@ export function totalValue(positions: Position[]): number {
 
 export function filterFiis(positions: Position[]): Position[] {
   return positions.filter(
-    (p) => p.assetClass === "fii" || lookupFii(p.ticker).tipo !== "desconhecido"
+    (p) =>
+      p.ticker.endsWith("11") &&
+      (p.assetClass === "fii" || lookupFii(p.ticker).tipo !== "desconhecido")
   );
 }
 

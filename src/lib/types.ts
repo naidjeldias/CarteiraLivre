@@ -39,6 +39,8 @@ export interface FiiMeta {
   name: string;
   tipo: FiiTipo;
   segmento: FiiSegmento;
+  /** CNPJ do fundo (CVM). Sem isso o join com dados abertos falha. */
+  cnpj?: string;
 }
 
 export interface PortfolioSnapshot {

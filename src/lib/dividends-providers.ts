@@ -26,7 +26,7 @@ async function fetchBolsaiDividends(ticker: string): Promise<DividendsResult | n
   if (!key) return null;
 
   const url = new URL(`https://api.usebolsai.com/api/v1/fiis/${encodeURIComponent(ticker)}/distributions`);
-  url.searchParams.set("years", "2");
+  url.searchParams.set("years", "5");
 
   const res = await fetch(url.toString(), {
     headers: { "X-API-Key": key },
@@ -105,11 +105,10 @@ async function fetchStatusInvestDividends(ticker: string): Promise<DividendsResu
       lastDatePrior: r.ed ? parseBrDate(r.ed) : undefined,
       relatedTo: r.ed ? parseBrDate(r.ed).slice(0, 7) : null,
     }))
-    // últimos ~18 meses
     .filter((d) => {
       const t = Date.parse(d.paymentDate);
       if (!Number.isFinite(t)) return true;
-      return t > Date.now() - 560 * 24 * 60 * 60 * 1000;
+      return t > Date.now() - 5 * 365 * 24 * 60 * 60 * 1000;
     });
 
   if (!dividends.length) return null;
@@ -135,7 +134,7 @@ async function fetchBrapiFiiDividends(
 
   const end = new Date();
   const start = new Date();
-  start.setMonth(start.getMonth() - 18);
+  start.setFullYear(start.getFullYear() - 5);
   const url = new URL("https://brapi.dev/api/v2/fii/dividends");
   url.searchParams.set("symbols", ticker);
   url.searchParams.set("startDate", start.toISOString().slice(0, 10));

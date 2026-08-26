@@ -29,6 +29,10 @@ import {
   type QuotesMap,
 } from "@/lib/quotes";
 import type { PortfolioSnapshot } from "@/lib/types";
+import { PortfolioAssistant } from "@/components/PortfolioAssistant";
+import { ValuesToggle } from "@/components/ValuesToggle";
+import { useShowValues } from "@/hooks/useShowValues";
+import { formatBRLSensitive } from "@/lib/format-sensitive";
 
 function openFiiDetail(ticker: string) {
   // Mesma aba: histórico do browser + snapshot no localStorage
@@ -78,6 +82,7 @@ export default function HomePage() {
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [quotesError, setQuotesError] = useState<string | null>(null);
   const [brapiConfigured, setBrapiConfigured] = useState<boolean | null>(null);
+  const { showValues, toggleShowValues } = useShowValues();
 
   useEffect(() => {
     const saved = loadPortfolioSnapshot();
@@ -113,7 +118,7 @@ export default function HomePage() {
       setQuotesAt(fetchedAt);
       const failed = Object.values(map).filter((q) => q.error).length;
       if (failed > 0) {
-        setQuotesError(`${failed} ticker(s) sem cotação (ex.: recibos *12 ou token/limites).`);
+        setQuotesError(`${failed} ticker(s) sem cotação (token, limites ou ticker inválido).`);
       }
     } catch (e) {
       setQuotesError(e instanceof Error ? e.message : "Falha ao atualizar cotações.");
@@ -161,11 +166,20 @@ export default function HomePage() {
 
   return (
     <main>
-      <h1 className="brand">CarteiraLivre</h1>
-      <p className="tagline">
-        Importe o <code>.xlsx</code> da B3 no seu navegador. Sem conta, sem mensalidade — seus
-        dados ficam locais. Cotações opcionais via brapi (plano Free).
-      </p>
+      <div className="page-top">
+        <div className="page-top-intro">
+          <h1 className="brand">CarteiraLivre</h1>
+          <p className="tagline">
+            Importe o <code>.xlsx</code> da B3 no seu navegador. Sem conta, sem mensalidade — seus
+            dados ficam locais. Cotações opcionais via brapi (plano Free).
+          </p>
+        </div>
+        <ValuesToggle
+          showValues={showValues}
+          onToggle={toggleShowValues}
+          className="page-values-toggle"
+        />
+      </div>
 
       <div className="upload">
         <label htmlFor="xlsx">Arquivo de posição B3 (.xlsx)</label>
@@ -217,11 +231,13 @@ export default function HomePage() {
           <div className="grid stats">
             <section className="panel">
               <p className="stat-label">Patrimônio (extrato B3)</p>
-              <p className="stat-value">{formatBRL(patrimonioExtrato)}</p>
+              <p className="stat-value">{formatBRLSensitive(patrimonioExtrato, showValues)}</p>
             </section>
             <section className="panel">
               <p className="stat-label">Patrimônio (mercado)</p>
-              <p className="stat-value">{formatBRL(hasQuotes ? patrimonioMercado : patrimonioExtrato)}</p>
+              <p className="stat-value">
+                {formatBRLSensitive(hasQuotes ? patrimonioMercado : patrimonioExtrato, showValues)}
+              </p>
               {hasQuotes && mtmDeltaPct != null && (
                 <p className={deltaClass(mtmDeltaPct)}>
                   vs extrato {formatSignedPct(mtmDeltaPct)}
@@ -231,16 +247,24 @@ export default function HomePage() {
             <section className="panel">
               <p className="stat-label">FIIs (mercado)</p>
               <p className="stat-value">
-                {formatBRL(hasQuotes ? fiiTotalMercado : fiiTotalExtrato)}
+                {formatBRLSensitive(hasQuotes ? fiiTotalMercado : fiiTotalExtrato, showValues)}
               </p>
             </section>
           </div>
 
           <div className="grid charts">
             <AllocationBars title="Alocação por classe" slices={allocationByAssetClass(snapshot)} />
-            <AllocationBars title="FIIs por tipo (papel / tijolo…)" slices={allocationByFiiTipo(snapshot)} />
-            <AllocationBars title="FIIs por segmento" slices={allocationByFiiSegmento(snapshot)} />
+            <AllocationBars
+              title="FIIs por tipo (papel / tijolo…)"
+              slices={allocationByFiiTipo(snapshot)}
+            />
+            <AllocationBars
+              title="FIIs por segmento"
+              slices={allocationByFiiSegmento(snapshot)}
+            />
           </div>
+
+          <PortfolioAssistant snapshot={snapshot} />
 
           <section className="panel" style={{ marginTop: "1rem" }}>
             <h2>Fundos imobiliários</h2>
@@ -294,14 +318,14 @@ export default function HomePage() {
                         </td>
                         <td>{meta.segmento}</td>
                         <td className="num">{p.quantity.toLocaleString("pt-BR")}</td>
-                        <td className="num">{formatBRL(p.price)}</td>
+                        <td className="num">{formatBRLSensitive(p.price, showValues)}</td>
                         <td className="num">
                           {mktPrice != null ? formatBRL(mktPrice) : q?.error ? "—" : "—"}
                         </td>
                         <td className={`num ${deltaClass(vs)}`}>
                           {vs != null ? formatSignedPct(vs) : "—"}
                         </td>
-                        <td className="num">{formatBRL(val)}</td>
+                        <td className="num">{formatBRLSensitive(val, showValues)}</td>
                         <td className="num">{formatPct(fiiBase ? val / fiiBase : 0)}</td>
                       </tr>
                     );
@@ -337,9 +361,11 @@ export default function HomePage() {
                         <td>{p.ticker}</td>
                         <td>{p.assetClass}</td>
                         <td className="num">{p.quantity.toLocaleString("pt-BR")}</td>
-                        <td className="num">{formatBRL(p.price)}</td>
-                        <td className="num">{mktPrice != null ? formatBRL(mktPrice) : "—"}</td>
-                        <td className="num">{formatBRL(val)}</td>
+                        <td className="num">{formatBRLSensitive(p.price, showValues)}</td>
+                        <td className="num">
+                          {mktPrice != null ? formatBRL(mktPrice) : "—"}
+                        </td>
+                        <td className="num">{formatBRLSensitive(val, showValues)}</td>
                         <td className="num">{formatPct(base ? val / base : 0)}</td>
                       </tr>
                     );

@@ -23,7 +23,11 @@ const QUOTEABLE: AssetClass[] = ["acao", "fii", "etf", "bdr"];
 
 export function isQuoteableTicker(ticker: string, assetClass: AssetClass): boolean {
   if (!QUOTEABLE.includes(assetClass)) return false;
-  // Cotas/recibos listados: XXXX11 … XXXX18 ou ações XXXX3/4
+  // FIIs e recibos: só cotas *11 (recibos *12–*18 costumam falhar na brapi)
+  if (assetClass === "fii" || /^[A-Z]{4}1[2-8]$/.test(ticker)) {
+    return /^[A-Z]{4}11$/.test(ticker);
+  }
+  // Ações, ETFs, BDRs: XXXX3/4 ou XXXX11 (ETF) etc.
   return /^[A-Z]{4}\d{1,2}[A-Z]?$/.test(ticker);
 }
 
