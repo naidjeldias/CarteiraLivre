@@ -1,9 +1,23 @@
-import { isGeminiConfigured, createGeminiClient, getDefaultGeminiModel, geminiErrorMessage } from "@/lib/agent/gemini";
+import {
+  isGeminiConfigured,
+  createGeminiClient,
+  getDefaultGeminiModel,
+  geminiErrorMessage,
+  resolveGeminiModel,
+} from "@/lib/agent/gemini";
 import { buildFiiDetail } from "@/lib/fii-detail";
 import { searchFiiDocuments } from "@/lib/rag/search";
 import { listDisclosures, readCachedSummary, readTickerIndex, writeCachedSummary } from "./store";
 
-export async function buildFiiCurrentSummary(ticker: string): Promise<{
+function cacheMatchesModel(cachedModel: string | undefined, resolvedModel: string): boolean {
+  if (cachedModel) return cachedModel === resolvedModel;
+  return resolvedModel === getDefaultGeminiModel();
+}
+
+export async function buildFiiCurrentSummary(
+  ticker: string,
+  options?: { model?: string }
+): Promise<{
   markdown: string;
   cached: boolean;
   geminiConfigured: boolean;
@@ -17,8 +31,9 @@ export async function buildFiiCurrentSummary(ticker: string): Promise<{
     };
   }
 
+  const resolvedModel = resolveGeminiModel(options?.model);
   const cached = readCachedSummary(key);
-  if (cached) {
+  if (cached && cacheMatchesModel(cached.model, resolvedModel)) {
     return { markdown: cached.markdown, cached: true, geminiConfigured: true };
   }
 
@@ -76,7 +91,7 @@ export async function buildFiiCurrentSummary(ticker: string): Promise<{
 
   const ai = createGeminiClient();
   const result = await ai.models.generateContent({
-    model: getDefaultGeminiModel(),
+    model: resolvedModel,
     contents: `Dados públicos do FII (JSON):\n${JSON.stringify(payload)}`,
     config: {
       systemInstruction: `Você resume o estado atual de um FII para um investidor educacional, em português do Brasil.
@@ -103,7 +118,12 @@ Provedores ausentes, cache vazio, falhas de extração ou syncError.`,
   if (!markdown) {
     throw new Error("O Gemini devolveu uma resposta vazia.");
   }
-  writeCachedSummary({ ticker: key, generatedAt: new Date().toISOString(), markdown });
+  writeCachedSummary({
+    ticker: key,
+    generatedAt: new Date().toISOString(),
+    markdown,
+    model: resolvedModel,
+  });
   return { markdown, cached: false, geminiConfigured: true };
 }
 

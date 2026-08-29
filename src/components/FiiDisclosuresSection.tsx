@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AssistantMessageBody } from "@/lib/agent/format-message";
+import { DEFAULT_GEMINI_MODEL, GEMINI_MODELS, type GeminiModelOption } from "@/lib/agent/models";
+import { fetchSessionModel, persistSessionModel } from "@/lib/agent/session-client";
 import type { DisclosureType, FiiDisclosure } from "@/lib/disclosures/types";
+import { ModelPicker } from "@/components/ModelPicker";
 
 interface EventsPayload {
   ticker: string;
@@ -28,7 +31,7 @@ function formatDateBR(iso: string): string {
   return `${day}/${m}/${y}`;
 }
 
-function ThinkingDots({ label }: { label?: string }) {
+function ThinkingDots({ label }: { label?: string | null }) {
   return (
     <div className="assistant-thinking" role="status" aria-live="polite">
       <span className="assistant-dots" aria-hidden="true">
@@ -47,6 +50,8 @@ export function FiiDisclosuresSection({ ticker }: { ticker: string }) {
   const [syncing, setSyncing] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [geminiOn, setGeminiOn] = useState<boolean | null>(null);
+  const [model, setModel] = useState(DEFAULT_GEMINI_MODEL);
+  const [models, setModels] = useState<GeminiModelOption[]>(GEMINI_MODELS);
   const [aiOpen, setAiOpen] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -93,10 +98,17 @@ export function FiiDisclosuresSection({ ticker }: { ticker: string }) {
     setAiMarkdown(null);
     setAiError(null);
 
-    fetch("/api/fii-ai/summary")
-      .then((r) => r.json())
-      .then((s: { configured?: boolean }) => {
-        if (!cancelled) setGeminiOn(Boolean(s.configured));
+    Promise.all([fetch("/api/fii-ai/summary").then((r) => r.json()), fetchSessionModel()])
+      .then(([status, sessionModel]) => {
+        if (cancelled) return;
+        const s = status as {
+          configured?: boolean;
+          defaultModel?: string;
+          models?: GeminiModelOption[];
+        };
+        setGeminiOn(Boolean(s.configured));
+        if (s.models?.length) setModels(s.models);
+        setModel(sessionModel || s.defaultModel || DEFAULT_GEMINI_MODEL);
       })
       .catch(() => {
         if (!cancelled) setGeminiOn(false);
@@ -130,7 +142,7 @@ export function FiiDisclosuresSection({ ticker }: { ticker: string }) {
       const res = await fetch("/api/fii-ai/summary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker }),
+        body: JSON.stringify({ ticker, model }),
       });
       const json = (await res.json()) as { markdown?: string; error?: string; configured?: boolean };
       if (json.configured === false) setGeminiOn(false);
@@ -142,7 +154,7 @@ export function FiiDisclosuresSection({ ticker }: { ticker: string }) {
     } finally {
       setAiBusy(false);
     }
-  }, [ticker]);
+  }, [ticker, model]);
 
   const items = payload?.disclosures ?? [];
   const firstLoad = (loading || syncing) && items.length === 0;
@@ -151,22 +163,33 @@ export function FiiDisclosuresSection({ ticker }: { ticker: string }) {
     <section className="panel detail-panel disclosure-panel">
       <div className="disclosure-head">
         <h2>Comunicados e informes recentes</h2>
-        <button
-          type="button"
-          className="btn"
-          disabled={geminiOn === false || aiBusy}
-          title={
-            geminiOn === false
-              ? "GEMINI_API_KEY não configurado"
-              : "Gerar resumo do estado atual"
-          }
-          onClick={() => {
-            if (geminiOn === false) return;
-            void requestSummary();
-          }}
-        >
-          Resumo IA
-        </button>
+        <div className="disclosure-head-actions">
+          <ModelPicker
+            models={models}
+            value={model}
+            onChange={(id) => {
+              setModel(id);
+              persistSessionModel(id);
+            }}
+            disabled={geminiOn === false || aiBusy}
+          />
+          <button
+            type="button"
+            className="btn"
+            disabled={geminiOn === false || aiBusy}
+            title={
+              geminiOn === false
+                ? "GEMINI_API_KEY não configurado"
+                : "Gerar resumo do estado atual"
+            }
+            onClick={() => {
+              if (geminiOn === false) return;
+              void requestSummary();
+            }}
+          >
+            Resumo IA
+          </button>
+        </div>
       </div>
 
       {geminiOn === false && (

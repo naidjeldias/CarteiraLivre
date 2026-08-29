@@ -39,6 +39,7 @@ export interface CachedSummary {
   ticker: string;
   generatedAt: string;
   markdown: string;
+  model?: string;
 }
 
 export const FATOS_DAYS = 180;

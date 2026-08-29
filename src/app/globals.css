@@ -510,6 +510,13 @@ tr.clickable:hover {
   margin: 0;
 }
 
+.disclosure-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
 .disclosure-ai-panel {
   margin: 0 0 1rem;
   padding: 0.85rem 0.95rem;
