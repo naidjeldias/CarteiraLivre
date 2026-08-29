@@ -18,7 +18,8 @@ import {
 import {
   chartRangeLabel,
   chartRangeStartDate,
-  DEFAULT_CHART_RANGE,
+  DEFAULT_DIVIDEND_CHART_RANGE,
+  DEFAULT_PRICE_CHART_RANGE,
   isOnOrAfter,
   type ChartRangeId,
 } from "@/lib/chart-ranges";
@@ -91,7 +92,10 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<PortfolioSnapshot | null>(null);
-  const [chartRange, setChartRange] = useState<ChartRangeId>(DEFAULT_CHART_RANGE);
+  const [priceChartRange, setPriceChartRange] = useState<ChartRangeId>(DEFAULT_PRICE_CHART_RANGE);
+  const [dividendChartRange, setDividendChartRange] = useState<ChartRangeId>(
+    DEFAULT_DIVIDEND_CHART_RANGE
+  );
   const [history, setHistory] = useState<PricePoint[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const meta = lookupFii(ticker);
@@ -104,11 +108,12 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
   useEffect(() => {
     let cancelled = false;
     skipHistoryFetch.current = true;
-    setChartRange(DEFAULT_CHART_RANGE);
+    setPriceChartRange(DEFAULT_PRICE_CHART_RANGE);
+    setDividendChartRange(DEFAULT_DIVIDEND_CHART_RANGE);
     setLoading(true);
     setError(null);
     fetch(
-      `/api/fii-detail?ticker=${encodeURIComponent(ticker)}&range=${DEFAULT_CHART_RANGE}`
+      `/api/fii-detail?ticker=${encodeURIComponent(ticker)}&range=${DEFAULT_PRICE_CHART_RANGE}`
     )
       .then(async (res) => {
         const json = await res.json();
@@ -137,7 +142,7 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
     let cancelled = false;
     setHistoryLoading(true);
     fetch(
-      `/api/fii-history?ticker=${encodeURIComponent(ticker)}&range=${encodeURIComponent(chartRange)}`
+      `/api/fii-history?ticker=${encodeURIComponent(ticker)}&range=${encodeURIComponent(priceChartRange)}`
     )
       .then(async (res) => {
         const json = await res.json();
@@ -153,14 +158,17 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
     return () => {
       cancelled = true;
     };
-  }, [ticker, chartRange]);
+  }, [ticker, priceChartRange]);
 
-  const rangeStart = useMemo(() => chartRangeStartDate(chartRange), [chartRange]);
+  const dividendRangeStart = useMemo(
+    () => chartRangeStartDate(dividendChartRange),
+    [dividendChartRange]
+  );
 
   const filteredDividends = useMemo(
     () =>
-      (data?.dividends || []).filter((d) => isOnOrAfter(d.paymentDate, rangeStart)),
-    [data, rangeStart]
+      (data?.dividends || []).filter((d) => isOnOrAfter(d.paymentDate, dividendRangeStart)),
+    [data, dividendRangeStart]
   );
 
   const chartData = useMemo(
@@ -278,10 +286,10 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
       {!loading && !error && data && tab === "cotacao" && (
         <section className="panel detail-panel">
           <div className="chart-panel-head">
-            <h2>Preço — {chartRangeLabel(chartRange)}</h2>
+            <h2>Preço — {chartRangeLabel(priceChartRange)}</h2>
             <ChartRangeSelect
-              value={chartRange}
-              onChange={setChartRange}
+              value={priceChartRange}
+              onChange={setPriceChartRange}
               disabled={historyLoading}
             />
           </div>
@@ -366,8 +374,8 @@ export function FiiDetailView({ ticker }: { ticker: string }) {
       {!loading && !error && data && tab === "dividendos" && (
         <section className="panel detail-panel">
           <div className="chart-panel-head">
-            <h2>Proventos — {chartRangeLabel(chartRange)}</h2>
-            <ChartRangeSelect value={chartRange} onChange={setChartRange} />
+            <h2>Proventos — {chartRangeLabel(dividendChartRange)}</h2>
+            <ChartRangeSelect value={dividendChartRange} onChange={setDividendChartRange} />
           </div>
           {(data.dividendYieldTtm != null || data.ttmPerShare != null) && (
             <div className="grid stats detail-stats">

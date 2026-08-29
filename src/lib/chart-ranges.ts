@@ -14,7 +14,11 @@ export const CHART_RANGES: ChartRangeOption[] = [
   { id: "5y", label: "5 Anos", brapiRange: "5y" },
 ];
 
-export const DEFAULT_CHART_RANGE: ChartRangeId = "5d";
+export const DEFAULT_PRICE_CHART_RANGE: ChartRangeId = "1mo";
+export const DEFAULT_DIVIDEND_CHART_RANGE: ChartRangeId = "1y";
+
+/** Fallback for price/history API when range is omitted. */
+export const DEFAULT_CHART_RANGE: ChartRangeId = DEFAULT_PRICE_CHART_RANGE;
 
 export function chartRangeLabel(id: ChartRangeId): string {
   return CHART_RANGES.find((r) => r.id === id)?.label ?? id;
