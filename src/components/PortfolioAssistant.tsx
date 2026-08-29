@@ -124,6 +124,45 @@ async function fetchAgentStatus(): Promise<{
   return res.json();
 }
 
+interface AssistantSessionPayload {
+  messages: ChatMessage[];
+  open: boolean;
+  model: string;
+}
+
+async function fetchAssistantSession(): Promise<AssistantSessionPayload | null> {
+  try {
+    const res = await fetch("/api/agent/session");
+    if (!res.ok) return null;
+    const data = (await res.json()) as Partial<AssistantSessionPayload>;
+    if (!Array.isArray(data.messages)) return null;
+    const messages: ChatMessage[] = [];
+    for (const item of data.messages) {
+      if (!item || typeof item !== "object") continue;
+      if (item.role !== "user" && item.role !== "assistant") continue;
+      if (typeof item.content !== "string") continue;
+      messages.push({ role: item.role, content: item.content });
+    }
+    return {
+      messages,
+      open: typeof data.open === "boolean" ? data.open : true,
+      model: typeof data.model === "string" ? data.model : DEFAULT_GEMINI_MODEL,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistAssistantSession(payload: AssistantSessionPayload): void {
+  void fetch("/api/agent/session", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).catch(() => {
+    // best-effort — process memory may be unavailable
+  });
+}
+
 function parseSseBuffer(buffer: string): { events: unknown[]; rest: string } {
   const chunks = buffer.split("\n\n");
   const rest = chunks.pop() ?? "";
@@ -161,17 +200,84 @@ export function PortfolioAssistant({
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [model, setModel] = useState(DEFAULT_GEMINI_MODEL);
   const [models, setModels] = useState<GeminiModelOption[]>(GEMINI_MODELS);
+  const [hydrated, setHydrated] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const saveTimerRef = useRef<number | null>(null);
+  const skipAbortErrorRef = useRef(false);
+  const hydratedRef = useRef(false);
+  const sessionRef = useRef<AssistantSessionPayload>({
+    messages: [],
+    open: true,
+    model: DEFAULT_GEMINI_MODEL,
+  });
+  sessionRef.current = { messages, open, model };
 
   useEffect(() => {
-    fetchAgentStatus()
-      .then((s) => {
+    let cancelled = false;
+    Promise.all([fetchAgentStatus(), fetchAssistantSession()])
+      .then(([s, session]) => {
+        if (cancelled) return;
         setConfigured(s.configured);
         if (s.models?.length) setModels(s.models);
-        if (s.defaultModel) setModel(s.defaultModel);
+        if (session) {
+          setMessages(session.messages);
+          setOpen(session.open);
+          setModel(session.model || s.defaultModel || DEFAULT_GEMINI_MODEL);
+        } else if (s.defaultModel) {
+          setModel(s.defaultModel);
+        }
+        hydratedRef.current = true;
+        setHydrated(true);
       })
-      .catch(() => setConfigured(false));
+      .catch(() => {
+        if (cancelled) return;
+        setConfigured(false);
+        hydratedRef.current = true;
+        setHydrated(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const payload: AssistantSessionPayload = { messages, open, model };
+    const flush = () => persistAssistantSession(payload);
+
+    if (busy) {
+      if (saveTimerRef.current != null) window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = window.setTimeout(flush, 400);
+      return () => {
+        if (saveTimerRef.current != null) {
+          window.clearTimeout(saveTimerRef.current);
+          saveTimerRef.current = null;
+        }
+      };
+    }
+
+    if (saveTimerRef.current != null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    flush();
+  }, [messages, open, model, busy, hydrated]);
+
+  useEffect(() => {
+    skipAbortErrorRef.current = false;
+    return () => {
+      if (saveTimerRef.current != null) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      skipAbortErrorRef.current = true;
+      abortRef.current?.abort();
+      if (hydratedRef.current) {
+        persistAssistantSession(sessionRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -266,7 +372,9 @@ export function PortfolioAssistant({
       }
     } catch (e) {
       if (abort.signal.aborted) {
-        fail("A resposta demorou demais. Tente de novo.");
+        if (!skipAbortErrorRef.current) {
+          fail("A resposta demorou demais. Tente de novo.");
+        }
       } else {
         fail(e);
       }
